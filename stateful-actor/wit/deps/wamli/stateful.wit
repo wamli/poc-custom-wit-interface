@@ -1,0 +1,14 @@
+package wamli:stateful;
+
+// An interface for receiving (immutable) state from an actor
+interface state {
+   record error {
+      status-code: u32,
+      status: string,
+      error: string
+   }
+
+   // either receive data (state) or some metadata describing the data
+   get-data: func() -> result<list<u8>, error>;
+   get-metadata: func() -> result<list<string>, error>;
+}

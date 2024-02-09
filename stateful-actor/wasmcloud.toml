@@ -1,0 +1,11 @@
+name = "stateful"
+language = "rust"
+type = "actor"
+version = "0.1.0"
+
+[actor]
+claims = [
+  "wasmcloud:httpserver",
+]
+wit_world = "interfaces"
+wasm_target = "wasm32-wasi-preview2"
