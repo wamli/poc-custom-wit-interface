@@ -1,0 +1,5 @@
+package wamli:ai;
+
+world wamli-ai {
+    import wamli:ai/model;
+}

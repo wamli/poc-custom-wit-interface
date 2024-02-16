@@ -1,0 +1,60 @@
+package wamli:ai;
+
+// An interface for receiving (immutable) state from an actor
+interface model {
+    record metadata {
+       model-name: string,
+       graph-encoding: string,
+       execution-target: execution-target,
+       tensor-type: tensor-type,
+       tensor-dimensions-in: list<u32>,
+       tensor-dimensions-out: list<u32>,
+    }
+ 
+    enum execution-target {
+       cpu,
+       gpu,
+       tpu,
+    }
+ 
+    enum tensor-type {
+       /// Unsigned 8-bit data (0x00) (b0000 0000)
+       U8,
+       /// Unsigned 16-bit data (0x01) (b0000 0001)
+       U16,
+       /// Unsigned 32-bit data (0x02) (b0000 0010)
+       U32,
+       /// Unsigned 64-bit data (0x03) (b0000 0011)
+       U64,
+       /// Unsigned 128-bit data (0x04) (b0000 0100)
+       U128,
+       /// Signed 8-bit data (0x40) (b0100 0000)
+       S8,
+       /// Signed 16-bit data (0x41) (b0100 0001)
+       S16,
+       /// Signed 32-bit data (0x42) (b0100 0010)
+       S32,
+       /// Signed 64-bit data (0x43) (b0100 0011)
+       S64,
+       /// Signed 128-bit data (0x44) (b0100 0100)
+       S128,
+       /// 16-bit IEEE Float (0x81) (b1000 0001)
+       F16,
+       /// 32-bit IEEE Float (0x82) (b1000 0010)
+       F32,
+       /// 64-bit IEEE Float (0x83) (b1000 0011)
+       F64,
+       /// 128-bit IEEE Float (0x84) (b1000 0100)
+       F128,
+    }
+ 
+    record error {
+       status-code: u32,
+       status: string,
+       error: string
+    }
+ 
+    // either receive data (state) or some metadata describing the data
+    get-data: func() -> result<list<u8>, error>;
+    get-metadata: func() -> result<metadata, error>;
+ }
