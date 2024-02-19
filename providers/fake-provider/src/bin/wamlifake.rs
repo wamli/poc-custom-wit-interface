@@ -23,8 +23,8 @@ use wasmcloud_provider_wit_bindgen::deps::{
 
 wasmcloud_provider_wit_bindgen::generate!({
     impl_struct: AiModelProvider,
-    contract: "wamli:ai",
-    wit_bindgen_cfg: "wamli-ai"
+    contract: "wamli:ml",
+    wit_bindgen_cfg: "wamli-ml"
 });
 
 // wasmtime::component::bindgen!({
@@ -91,8 +91,26 @@ impl WasmcloudCapabilityProvider for AiModelProvider {
 }
 
 #[async_trait]
-impl WamliAiIt for AiModelProvider {
+impl WamliMlInference for AiModelProvider {
     async fn fake_it(&self, _ctx: Context) -> bool {
         true
     }
+
+    async fn predict(&self, _ctx: Context, _input: InferenceInput) -> InferenceOutput {
+        let tensor = Tensor {
+            dimensions: [1, 2, 3],
+            value_types: vec![],
+            bit_flags: 0,
+            data: vec![],
+        };
+
+        InferenceOutput {
+            status: Status::Success(true),
+            tensor: tensor,
+        }
+    }
+
+    // async fn predict(&self, _ctx: Context, _: u32) -> bool {
+    //     true
+    // }
 }

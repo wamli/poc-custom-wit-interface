@@ -1,6 +1,0 @@
-package wamli:fake;
-
-world wamli-ai {
-   import wamli:ai/model;
-   export wamli:ai/it;
-}

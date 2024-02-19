@@ -1,6 +1,0 @@
-package wamli:ai;
-
-// An interface for receiving (immutable) state from an actor
-interface it {
-   fake-it: func() -> bool;
-}

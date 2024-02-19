@@ -1,0 +1,26 @@
+package wamli:ml;
+
+// An interface for receiving (immutable) state from an actor
+interface inference {
+   
+   use types.{
+      tensor,
+      status,
+   };
+
+   record inference-input {
+      model: string,
+      tensor: tensor,
+      index: u32,
+   }
+
+   record inference-output {
+      status: status,
+      tensor: tensor,   
+   }
+   
+   predict: func(input: inference-input) -> inference-output;
+   // predict: func(input: u32) -> bool;
+   
+   fake-it: func() -> bool;
+}

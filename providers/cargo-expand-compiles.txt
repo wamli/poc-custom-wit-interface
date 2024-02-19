@@ -1,0 +1,1862 @@
+#![feature(prelude_import)]
+//! Redis implementation for wasmcloud:keyvalue.
+//!
+//! This implementation is multi-threaded and operations between different actors
+#[prelude_import]
+use std::prelude::rust_2021::*;
+#[macro_use]
+extern crate std;
+use std::collections::HashMap;
+use std::ops::DerefMut;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tracing::{error, info, instrument, warn};
+use redis::aio::ConnectionManager;
+use wasmtime::component::{Resource, ResourceTable};
+use wasmcloud_provider_wit_bindgen::deps::{
+    async_trait::async_trait, serde::Deserialize, serde_json,
+    wasmcloud_provider_sdk::core::LinkDefinition,
+    wasmcloud_provider_sdk::provider_main::start_provider,
+    wasmcloud_provider_sdk::{load_host_data, Context},
+};
+pub trait WamliMlInference {
+    fn contract_id() -> &'static str {
+        "wamli:ml"
+    }
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn predict<'life0, 'async_trait>(
+        &'life0 self,
+        ctx: ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::Context,
+        arg0: u32,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<
+                Output = bool,
+            > + ::core::marker::Send + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait;
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn fake_it<'life0, 'async_trait>(
+        &'life0 self,
+        ctx: ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::Context,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<
+                Output = bool,
+            > + ::core::marker::Send + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait;
+}
+#[serde(crate = "::wasmcloud_provider_wit_bindgen::deps::serde")]
+pub enum ExecutionTarget {
+    Cpu,
+    Gpu,
+    Tpu,
+}
+#[automatically_derived]
+impl ::core::fmt::Debug for ExecutionTarget {
+    #[inline]
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        ::core::fmt::Formatter::write_str(
+            f,
+            match self {
+                ExecutionTarget::Cpu => "Cpu",
+                ExecutionTarget::Gpu => "Gpu",
+                ExecutionTarget::Tpu => "Tpu",
+            },
+        )
+    }
+}
+#[doc(hidden)]
+#[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+const _: () = {
+    use ::wasmcloud_provider_wit_bindgen::deps::serde as _serde;
+    #[automatically_derived]
+    impl ::wasmcloud_provider_wit_bindgen::deps::serde::Serialize for ExecutionTarget {
+        fn serialize<__S>(
+            &self,
+            __serializer: __S,
+        ) -> ::wasmcloud_provider_wit_bindgen::deps::serde::__private::Result<
+            __S::Ok,
+            __S::Error,
+        >
+        where
+            __S: ::wasmcloud_provider_wit_bindgen::deps::serde::Serializer,
+        {
+            match *self {
+                ExecutionTarget::Cpu => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ExecutionTarget",
+                        0u32,
+                        "Cpu",
+                    )
+                }
+                ExecutionTarget::Gpu => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ExecutionTarget",
+                        1u32,
+                        "Gpu",
+                    )
+                }
+                ExecutionTarget::Tpu => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ExecutionTarget",
+                        2u32,
+                        "Tpu",
+                    )
+                }
+            }
+        }
+    }
+};
+#[doc(hidden)]
+#[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+const _: () = {
+    use ::wasmcloud_provider_wit_bindgen::deps::serde as _serde;
+    #[automatically_derived]
+    impl<'de> ::wasmcloud_provider_wit_bindgen::deps::serde::Deserialize<'de>
+    for ExecutionTarget {
+        fn deserialize<__D>(
+            __deserializer: __D,
+        ) -> ::wasmcloud_provider_wit_bindgen::deps::serde::__private::Result<
+            Self,
+            __D::Error,
+        >
+        where
+            __D: ::wasmcloud_provider_wit_bindgen::deps::serde::Deserializer<'de>,
+        {
+            #[allow(non_camel_case_types)]
+            #[doc(hidden)]
+            enum __Field {
+                __field0,
+                __field1,
+                __field2,
+            }
+            #[doc(hidden)]
+            struct __FieldVisitor;
+            impl<'de> _serde::de::Visitor<'de> for __FieldVisitor {
+                type Value = __Field;
+                fn expecting(
+                    &self,
+                    __formatter: &mut _serde::__private::Formatter,
+                ) -> _serde::__private::fmt::Result {
+                    _serde::__private::Formatter::write_str(
+                        __formatter,
+                        "variant identifier",
+                    )
+                }
+                fn visit_u64<__E>(
+                    self,
+                    __value: u64,
+                ) -> _serde::__private::Result<Self::Value, __E>
+                where
+                    __E: _serde::de::Error,
+                {
+                    match __value {
+                        0u64 => _serde::__private::Ok(__Field::__field0),
+                        1u64 => _serde::__private::Ok(__Field::__field1),
+                        2u64 => _serde::__private::Ok(__Field::__field2),
+                        _ => {
+                            _serde::__private::Err(
+                                _serde::de::Error::invalid_value(
+                                    _serde::de::Unexpected::Unsigned(__value),
+                                    &"variant index 0 <= i < 3",
+                                ),
+                            )
+                        }
+                    }
+                }
+                fn visit_str<__E>(
+                    self,
+                    __value: &str,
+                ) -> _serde::__private::Result<Self::Value, __E>
+                where
+                    __E: _serde::de::Error,
+                {
+                    match __value {
+                        "Cpu" => _serde::__private::Ok(__Field::__field0),
+                        "Gpu" => _serde::__private::Ok(__Field::__field1),
+                        "Tpu" => _serde::__private::Ok(__Field::__field2),
+                        _ => {
+                            _serde::__private::Err(
+                                _serde::de::Error::unknown_variant(__value, VARIANTS),
+                            )
+                        }
+                    }
+                }
+                fn visit_bytes<__E>(
+                    self,
+                    __value: &[u8],
+                ) -> _serde::__private::Result<Self::Value, __E>
+                where
+                    __E: _serde::de::Error,
+                {
+                    match __value {
+                        b"Cpu" => _serde::__private::Ok(__Field::__field0),
+                        b"Gpu" => _serde::__private::Ok(__Field::__field1),
+                        b"Tpu" => _serde::__private::Ok(__Field::__field2),
+                        _ => {
+                            let __value = &_serde::__private::from_utf8_lossy(__value);
+                            _serde::__private::Err(
+                                _serde::de::Error::unknown_variant(__value, VARIANTS),
+                            )
+                        }
+                    }
+                }
+            }
+            impl<'de> _serde::Deserialize<'de> for __Field {
+                #[inline]
+                fn deserialize<__D>(
+                    __deserializer: __D,
+                ) -> _serde::__private::Result<Self, __D::Error>
+                where
+                    __D: _serde::Deserializer<'de>,
+                {
+                    _serde::Deserializer::deserialize_identifier(
+                        __deserializer,
+                        __FieldVisitor,
+                    )
+                }
+            }
+            #[doc(hidden)]
+            struct __Visitor<'de> {
+                marker: _serde::__private::PhantomData<ExecutionTarget>,
+                lifetime: _serde::__private::PhantomData<&'de ()>,
+            }
+            impl<'de> _serde::de::Visitor<'de> for __Visitor<'de> {
+                type Value = ExecutionTarget;
+                fn expecting(
+                    &self,
+                    __formatter: &mut _serde::__private::Formatter,
+                ) -> _serde::__private::fmt::Result {
+                    _serde::__private::Formatter::write_str(
+                        __formatter,
+                        "enum ExecutionTarget",
+                    )
+                }
+                fn visit_enum<__A>(
+                    self,
+                    __data: __A,
+                ) -> _serde::__private::Result<Self::Value, __A::Error>
+                where
+                    __A: _serde::de::EnumAccess<'de>,
+                {
+                    match _serde::de::EnumAccess::variant(__data)? {
+                        (__Field::__field0, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ExecutionTarget::Cpu)
+                        }
+                        (__Field::__field1, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ExecutionTarget::Gpu)
+                        }
+                        (__Field::__field2, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ExecutionTarget::Tpu)
+                        }
+                    }
+                }
+            }
+            #[doc(hidden)]
+            const VARIANTS: &'static [&'static str] = &["Cpu", "Gpu", "Tpu"];
+            _serde::Deserializer::deserialize_enum(
+                __deserializer,
+                "ExecutionTarget",
+                VARIANTS,
+                __Visitor {
+                    marker: _serde::__private::PhantomData::<ExecutionTarget>,
+                    lifetime: _serde::__private::PhantomData,
+                },
+            )
+        }
+    }
+};
+#[serde(crate = "::wasmcloud_provider_wit_bindgen::deps::serde")]
+pub enum ValueType {
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    S8,
+    S16,
+    S32,
+    S64,
+    S128,
+    F16,
+    F32,
+    F64,
+    F128,
+}
+#[automatically_derived]
+impl ::core::fmt::Debug for ValueType {
+    #[inline]
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        ::core::fmt::Formatter::write_str(
+            f,
+            match self {
+                ValueType::U8 => "U8",
+                ValueType::U16 => "U16",
+                ValueType::U32 => "U32",
+                ValueType::U64 => "U64",
+                ValueType::U128 => "U128",
+                ValueType::S8 => "S8",
+                ValueType::S16 => "S16",
+                ValueType::S32 => "S32",
+                ValueType::S64 => "S64",
+                ValueType::S128 => "S128",
+                ValueType::F16 => "F16",
+                ValueType::F32 => "F32",
+                ValueType::F64 => "F64",
+                ValueType::F128 => "F128",
+            },
+        )
+    }
+}
+#[doc(hidden)]
+#[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+const _: () = {
+    use ::wasmcloud_provider_wit_bindgen::deps::serde as _serde;
+    #[automatically_derived]
+    impl ::wasmcloud_provider_wit_bindgen::deps::serde::Serialize for ValueType {
+        fn serialize<__S>(
+            &self,
+            __serializer: __S,
+        ) -> ::wasmcloud_provider_wit_bindgen::deps::serde::__private::Result<
+            __S::Ok,
+            __S::Error,
+        >
+        where
+            __S: ::wasmcloud_provider_wit_bindgen::deps::serde::Serializer,
+        {
+            match *self {
+                ValueType::U8 => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ValueType",
+                        0u32,
+                        "U8",
+                    )
+                }
+                ValueType::U16 => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ValueType",
+                        1u32,
+                        "U16",
+                    )
+                }
+                ValueType::U32 => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ValueType",
+                        2u32,
+                        "U32",
+                    )
+                }
+                ValueType::U64 => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ValueType",
+                        3u32,
+                        "U64",
+                    )
+                }
+                ValueType::U128 => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ValueType",
+                        4u32,
+                        "U128",
+                    )
+                }
+                ValueType::S8 => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ValueType",
+                        5u32,
+                        "S8",
+                    )
+                }
+                ValueType::S16 => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ValueType",
+                        6u32,
+                        "S16",
+                    )
+                }
+                ValueType::S32 => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ValueType",
+                        7u32,
+                        "S32",
+                    )
+                }
+                ValueType::S64 => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ValueType",
+                        8u32,
+                        "S64",
+                    )
+                }
+                ValueType::S128 => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ValueType",
+                        9u32,
+                        "S128",
+                    )
+                }
+                ValueType::F16 => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ValueType",
+                        10u32,
+                        "F16",
+                    )
+                }
+                ValueType::F32 => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ValueType",
+                        11u32,
+                        "F32",
+                    )
+                }
+                ValueType::F64 => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ValueType",
+                        12u32,
+                        "F64",
+                    )
+                }
+                ValueType::F128 => {
+                    _serde::Serializer::serialize_unit_variant(
+                        __serializer,
+                        "ValueType",
+                        13u32,
+                        "F128",
+                    )
+                }
+            }
+        }
+    }
+};
+#[doc(hidden)]
+#[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+const _: () = {
+    use ::wasmcloud_provider_wit_bindgen::deps::serde as _serde;
+    #[automatically_derived]
+    impl<'de> ::wasmcloud_provider_wit_bindgen::deps::serde::Deserialize<'de>
+    for ValueType {
+        fn deserialize<__D>(
+            __deserializer: __D,
+        ) -> ::wasmcloud_provider_wit_bindgen::deps::serde::__private::Result<
+            Self,
+            __D::Error,
+        >
+        where
+            __D: ::wasmcloud_provider_wit_bindgen::deps::serde::Deserializer<'de>,
+        {
+            #[allow(non_camel_case_types)]
+            #[doc(hidden)]
+            enum __Field {
+                __field0,
+                __field1,
+                __field2,
+                __field3,
+                __field4,
+                __field5,
+                __field6,
+                __field7,
+                __field8,
+                __field9,
+                __field10,
+                __field11,
+                __field12,
+                __field13,
+            }
+            #[doc(hidden)]
+            struct __FieldVisitor;
+            impl<'de> _serde::de::Visitor<'de> for __FieldVisitor {
+                type Value = __Field;
+                fn expecting(
+                    &self,
+                    __formatter: &mut _serde::__private::Formatter,
+                ) -> _serde::__private::fmt::Result {
+                    _serde::__private::Formatter::write_str(
+                        __formatter,
+                        "variant identifier",
+                    )
+                }
+                fn visit_u64<__E>(
+                    self,
+                    __value: u64,
+                ) -> _serde::__private::Result<Self::Value, __E>
+                where
+                    __E: _serde::de::Error,
+                {
+                    match __value {
+                        0u64 => _serde::__private::Ok(__Field::__field0),
+                        1u64 => _serde::__private::Ok(__Field::__field1),
+                        2u64 => _serde::__private::Ok(__Field::__field2),
+                        3u64 => _serde::__private::Ok(__Field::__field3),
+                        4u64 => _serde::__private::Ok(__Field::__field4),
+                        5u64 => _serde::__private::Ok(__Field::__field5),
+                        6u64 => _serde::__private::Ok(__Field::__field6),
+                        7u64 => _serde::__private::Ok(__Field::__field7),
+                        8u64 => _serde::__private::Ok(__Field::__field8),
+                        9u64 => _serde::__private::Ok(__Field::__field9),
+                        10u64 => _serde::__private::Ok(__Field::__field10),
+                        11u64 => _serde::__private::Ok(__Field::__field11),
+                        12u64 => _serde::__private::Ok(__Field::__field12),
+                        13u64 => _serde::__private::Ok(__Field::__field13),
+                        _ => {
+                            _serde::__private::Err(
+                                _serde::de::Error::invalid_value(
+                                    _serde::de::Unexpected::Unsigned(__value),
+                                    &"variant index 0 <= i < 14",
+                                ),
+                            )
+                        }
+                    }
+                }
+                fn visit_str<__E>(
+                    self,
+                    __value: &str,
+                ) -> _serde::__private::Result<Self::Value, __E>
+                where
+                    __E: _serde::de::Error,
+                {
+                    match __value {
+                        "U8" => _serde::__private::Ok(__Field::__field0),
+                        "U16" => _serde::__private::Ok(__Field::__field1),
+                        "U32" => _serde::__private::Ok(__Field::__field2),
+                        "U64" => _serde::__private::Ok(__Field::__field3),
+                        "U128" => _serde::__private::Ok(__Field::__field4),
+                        "S8" => _serde::__private::Ok(__Field::__field5),
+                        "S16" => _serde::__private::Ok(__Field::__field6),
+                        "S32" => _serde::__private::Ok(__Field::__field7),
+                        "S64" => _serde::__private::Ok(__Field::__field8),
+                        "S128" => _serde::__private::Ok(__Field::__field9),
+                        "F16" => _serde::__private::Ok(__Field::__field10),
+                        "F32" => _serde::__private::Ok(__Field::__field11),
+                        "F64" => _serde::__private::Ok(__Field::__field12),
+                        "F128" => _serde::__private::Ok(__Field::__field13),
+                        _ => {
+                            _serde::__private::Err(
+                                _serde::de::Error::unknown_variant(__value, VARIANTS),
+                            )
+                        }
+                    }
+                }
+                fn visit_bytes<__E>(
+                    self,
+                    __value: &[u8],
+                ) -> _serde::__private::Result<Self::Value, __E>
+                where
+                    __E: _serde::de::Error,
+                {
+                    match __value {
+                        b"U8" => _serde::__private::Ok(__Field::__field0),
+                        b"U16" => _serde::__private::Ok(__Field::__field1),
+                        b"U32" => _serde::__private::Ok(__Field::__field2),
+                        b"U64" => _serde::__private::Ok(__Field::__field3),
+                        b"U128" => _serde::__private::Ok(__Field::__field4),
+                        b"S8" => _serde::__private::Ok(__Field::__field5),
+                        b"S16" => _serde::__private::Ok(__Field::__field6),
+                        b"S32" => _serde::__private::Ok(__Field::__field7),
+                        b"S64" => _serde::__private::Ok(__Field::__field8),
+                        b"S128" => _serde::__private::Ok(__Field::__field9),
+                        b"F16" => _serde::__private::Ok(__Field::__field10),
+                        b"F32" => _serde::__private::Ok(__Field::__field11),
+                        b"F64" => _serde::__private::Ok(__Field::__field12),
+                        b"F128" => _serde::__private::Ok(__Field::__field13),
+                        _ => {
+                            let __value = &_serde::__private::from_utf8_lossy(__value);
+                            _serde::__private::Err(
+                                _serde::de::Error::unknown_variant(__value, VARIANTS),
+                            )
+                        }
+                    }
+                }
+            }
+            impl<'de> _serde::Deserialize<'de> for __Field {
+                #[inline]
+                fn deserialize<__D>(
+                    __deserializer: __D,
+                ) -> _serde::__private::Result<Self, __D::Error>
+                where
+                    __D: _serde::Deserializer<'de>,
+                {
+                    _serde::Deserializer::deserialize_identifier(
+                        __deserializer,
+                        __FieldVisitor,
+                    )
+                }
+            }
+            #[doc(hidden)]
+            struct __Visitor<'de> {
+                marker: _serde::__private::PhantomData<ValueType>,
+                lifetime: _serde::__private::PhantomData<&'de ()>,
+            }
+            impl<'de> _serde::de::Visitor<'de> for __Visitor<'de> {
+                type Value = ValueType;
+                fn expecting(
+                    &self,
+                    __formatter: &mut _serde::__private::Formatter,
+                ) -> _serde::__private::fmt::Result {
+                    _serde::__private::Formatter::write_str(
+                        __formatter,
+                        "enum ValueType",
+                    )
+                }
+                fn visit_enum<__A>(
+                    self,
+                    __data: __A,
+                ) -> _serde::__private::Result<Self::Value, __A::Error>
+                where
+                    __A: _serde::de::EnumAccess<'de>,
+                {
+                    match _serde::de::EnumAccess::variant(__data)? {
+                        (__Field::__field0, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ValueType::U8)
+                        }
+                        (__Field::__field1, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ValueType::U16)
+                        }
+                        (__Field::__field2, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ValueType::U32)
+                        }
+                        (__Field::__field3, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ValueType::U64)
+                        }
+                        (__Field::__field4, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ValueType::U128)
+                        }
+                        (__Field::__field5, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ValueType::S8)
+                        }
+                        (__Field::__field6, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ValueType::S16)
+                        }
+                        (__Field::__field7, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ValueType::S32)
+                        }
+                        (__Field::__field8, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ValueType::S64)
+                        }
+                        (__Field::__field9, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ValueType::S128)
+                        }
+                        (__Field::__field10, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ValueType::F16)
+                        }
+                        (__Field::__field11, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ValueType::F32)
+                        }
+                        (__Field::__field12, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ValueType::F64)
+                        }
+                        (__Field::__field13, __variant) => {
+                            _serde::de::VariantAccess::unit_variant(__variant)?;
+                            _serde::__private::Ok(ValueType::F128)
+                        }
+                    }
+                }
+            }
+            #[doc(hidden)]
+            const VARIANTS: &'static [&'static str] = &[
+                "U8",
+                "U16",
+                "U32",
+                "U64",
+                "U128",
+                "S8",
+                "S16",
+                "S32",
+                "S64",
+                "S128",
+                "F16",
+                "F32",
+                "F64",
+                "F128",
+            ];
+            _serde::Deserializer::deserialize_enum(
+                __deserializer,
+                "ValueType",
+                VARIANTS,
+                __Visitor {
+                    marker: _serde::__private::PhantomData::<ValueType>,
+                    lifetime: _serde::__private::PhantomData,
+                },
+            )
+        }
+    }
+};
+#[serde(crate = "::wasmcloud_provider_wit_bindgen::deps::serde")]
+pub enum MlError {
+    InvalidModel(String),
+    InvalidEncoding(String),
+    CorruptInputTensor(String),
+    RuntimeError(String),
+    OpenvinoError(String),
+    OnnxError(String),
+    TensorflowError(String),
+    TfliteError(String),
+    ContextNotFoundError(String),
+}
+#[automatically_derived]
+impl ::core::fmt::Debug for MlError {
+    #[inline]
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        match self {
+            MlError::InvalidModel(__self_0) => {
+                ::core::fmt::Formatter::debug_tuple_field1_finish(
+                    f,
+                    "InvalidModel",
+                    &__self_0,
+                )
+            }
+            MlError::InvalidEncoding(__self_0) => {
+                ::core::fmt::Formatter::debug_tuple_field1_finish(
+                    f,
+                    "InvalidEncoding",
+                    &__self_0,
+                )
+            }
+            MlError::CorruptInputTensor(__self_0) => {
+                ::core::fmt::Formatter::debug_tuple_field1_finish(
+                    f,
+                    "CorruptInputTensor",
+                    &__self_0,
+                )
+            }
+            MlError::RuntimeError(__self_0) => {
+                ::core::fmt::Formatter::debug_tuple_field1_finish(
+                    f,
+                    "RuntimeError",
+                    &__self_0,
+                )
+            }
+            MlError::OpenvinoError(__self_0) => {
+                ::core::fmt::Formatter::debug_tuple_field1_finish(
+                    f,
+                    "OpenvinoError",
+                    &__self_0,
+                )
+            }
+            MlError::OnnxError(__self_0) => {
+                ::core::fmt::Formatter::debug_tuple_field1_finish(
+                    f,
+                    "OnnxError",
+                    &__self_0,
+                )
+            }
+            MlError::TensorflowError(__self_0) => {
+                ::core::fmt::Formatter::debug_tuple_field1_finish(
+                    f,
+                    "TensorflowError",
+                    &__self_0,
+                )
+            }
+            MlError::TfliteError(__self_0) => {
+                ::core::fmt::Formatter::debug_tuple_field1_finish(
+                    f,
+                    "TfliteError",
+                    &__self_0,
+                )
+            }
+            MlError::ContextNotFoundError(__self_0) => {
+                ::core::fmt::Formatter::debug_tuple_field1_finish(
+                    f,
+                    "ContextNotFoundError",
+                    &__self_0,
+                )
+            }
+        }
+    }
+}
+#[doc(hidden)]
+#[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+const _: () = {
+    use ::wasmcloud_provider_wit_bindgen::deps::serde as _serde;
+    #[automatically_derived]
+    impl ::wasmcloud_provider_wit_bindgen::deps::serde::Serialize for MlError {
+        fn serialize<__S>(
+            &self,
+            __serializer: __S,
+        ) -> ::wasmcloud_provider_wit_bindgen::deps::serde::__private::Result<
+            __S::Ok,
+            __S::Error,
+        >
+        where
+            __S: ::wasmcloud_provider_wit_bindgen::deps::serde::Serializer,
+        {
+            match *self {
+                MlError::InvalidModel(ref __field0) => {
+                    _serde::Serializer::serialize_newtype_variant(
+                        __serializer,
+                        "MlError",
+                        0u32,
+                        "InvalidModel",
+                        __field0,
+                    )
+                }
+                MlError::InvalidEncoding(ref __field0) => {
+                    _serde::Serializer::serialize_newtype_variant(
+                        __serializer,
+                        "MlError",
+                        1u32,
+                        "InvalidEncoding",
+                        __field0,
+                    )
+                }
+                MlError::CorruptInputTensor(ref __field0) => {
+                    _serde::Serializer::serialize_newtype_variant(
+                        __serializer,
+                        "MlError",
+                        2u32,
+                        "CorruptInputTensor",
+                        __field0,
+                    )
+                }
+                MlError::RuntimeError(ref __field0) => {
+                    _serde::Serializer::serialize_newtype_variant(
+                        __serializer,
+                        "MlError",
+                        3u32,
+                        "RuntimeError",
+                        __field0,
+                    )
+                }
+                MlError::OpenvinoError(ref __field0) => {
+                    _serde::Serializer::serialize_newtype_variant(
+                        __serializer,
+                        "MlError",
+                        4u32,
+                        "OpenvinoError",
+                        __field0,
+                    )
+                }
+                MlError::OnnxError(ref __field0) => {
+                    _serde::Serializer::serialize_newtype_variant(
+                        __serializer,
+                        "MlError",
+                        5u32,
+                        "OnnxError",
+                        __field0,
+                    )
+                }
+                MlError::TensorflowError(ref __field0) => {
+                    _serde::Serializer::serialize_newtype_variant(
+                        __serializer,
+                        "MlError",
+                        6u32,
+                        "TensorflowError",
+                        __field0,
+                    )
+                }
+                MlError::TfliteError(ref __field0) => {
+                    _serde::Serializer::serialize_newtype_variant(
+                        __serializer,
+                        "MlError",
+                        7u32,
+                        "TfliteError",
+                        __field0,
+                    )
+                }
+                MlError::ContextNotFoundError(ref __field0) => {
+                    _serde::Serializer::serialize_newtype_variant(
+                        __serializer,
+                        "MlError",
+                        8u32,
+                        "ContextNotFoundError",
+                        __field0,
+                    )
+                }
+            }
+        }
+    }
+};
+#[doc(hidden)]
+#[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+const _: () = {
+    use ::wasmcloud_provider_wit_bindgen::deps::serde as _serde;
+    #[automatically_derived]
+    impl<'de> ::wasmcloud_provider_wit_bindgen::deps::serde::Deserialize<'de>
+    for MlError {
+        fn deserialize<__D>(
+            __deserializer: __D,
+        ) -> ::wasmcloud_provider_wit_bindgen::deps::serde::__private::Result<
+            Self,
+            __D::Error,
+        >
+        where
+            __D: ::wasmcloud_provider_wit_bindgen::deps::serde::Deserializer<'de>,
+        {
+            #[allow(non_camel_case_types)]
+            #[doc(hidden)]
+            enum __Field {
+                __field0,
+                __field1,
+                __field2,
+                __field3,
+                __field4,
+                __field5,
+                __field6,
+                __field7,
+                __field8,
+            }
+            #[doc(hidden)]
+            struct __FieldVisitor;
+            impl<'de> _serde::de::Visitor<'de> for __FieldVisitor {
+                type Value = __Field;
+                fn expecting(
+                    &self,
+                    __formatter: &mut _serde::__private::Formatter,
+                ) -> _serde::__private::fmt::Result {
+                    _serde::__private::Formatter::write_str(
+                        __formatter,
+                        "variant identifier",
+                    )
+                }
+                fn visit_u64<__E>(
+                    self,
+                    __value: u64,
+                ) -> _serde::__private::Result<Self::Value, __E>
+                where
+                    __E: _serde::de::Error,
+                {
+                    match __value {
+                        0u64 => _serde::__private::Ok(__Field::__field0),
+                        1u64 => _serde::__private::Ok(__Field::__field1),
+                        2u64 => _serde::__private::Ok(__Field::__field2),
+                        3u64 => _serde::__private::Ok(__Field::__field3),
+                        4u64 => _serde::__private::Ok(__Field::__field4),
+                        5u64 => _serde::__private::Ok(__Field::__field5),
+                        6u64 => _serde::__private::Ok(__Field::__field6),
+                        7u64 => _serde::__private::Ok(__Field::__field7),
+                        8u64 => _serde::__private::Ok(__Field::__field8),
+                        _ => {
+                            _serde::__private::Err(
+                                _serde::de::Error::invalid_value(
+                                    _serde::de::Unexpected::Unsigned(__value),
+                                    &"variant index 0 <= i < 9",
+                                ),
+                            )
+                        }
+                    }
+                }
+                fn visit_str<__E>(
+                    self,
+                    __value: &str,
+                ) -> _serde::__private::Result<Self::Value, __E>
+                where
+                    __E: _serde::de::Error,
+                {
+                    match __value {
+                        "InvalidModel" => _serde::__private::Ok(__Field::__field0),
+                        "InvalidEncoding" => _serde::__private::Ok(__Field::__field1),
+                        "CorruptInputTensor" => _serde::__private::Ok(__Field::__field2),
+                        "RuntimeError" => _serde::__private::Ok(__Field::__field3),
+                        "OpenvinoError" => _serde::__private::Ok(__Field::__field4),
+                        "OnnxError" => _serde::__private::Ok(__Field::__field5),
+                        "TensorflowError" => _serde::__private::Ok(__Field::__field6),
+                        "TfliteError" => _serde::__private::Ok(__Field::__field7),
+                        "ContextNotFoundError" => {
+                            _serde::__private::Ok(__Field::__field8)
+                        }
+                        _ => {
+                            _serde::__private::Err(
+                                _serde::de::Error::unknown_variant(__value, VARIANTS),
+                            )
+                        }
+                    }
+                }
+                fn visit_bytes<__E>(
+                    self,
+                    __value: &[u8],
+                ) -> _serde::__private::Result<Self::Value, __E>
+                where
+                    __E: _serde::de::Error,
+                {
+                    match __value {
+                        b"InvalidModel" => _serde::__private::Ok(__Field::__field0),
+                        b"InvalidEncoding" => _serde::__private::Ok(__Field::__field1),
+                        b"CorruptInputTensor" => _serde::__private::Ok(__Field::__field2),
+                        b"RuntimeError" => _serde::__private::Ok(__Field::__field3),
+                        b"OpenvinoError" => _serde::__private::Ok(__Field::__field4),
+                        b"OnnxError" => _serde::__private::Ok(__Field::__field5),
+                        b"TensorflowError" => _serde::__private::Ok(__Field::__field6),
+                        b"TfliteError" => _serde::__private::Ok(__Field::__field7),
+                        b"ContextNotFoundError" => {
+                            _serde::__private::Ok(__Field::__field8)
+                        }
+                        _ => {
+                            let __value = &_serde::__private::from_utf8_lossy(__value);
+                            _serde::__private::Err(
+                                _serde::de::Error::unknown_variant(__value, VARIANTS),
+                            )
+                        }
+                    }
+                }
+            }
+            impl<'de> _serde::Deserialize<'de> for __Field {
+                #[inline]
+                fn deserialize<__D>(
+                    __deserializer: __D,
+                ) -> _serde::__private::Result<Self, __D::Error>
+                where
+                    __D: _serde::Deserializer<'de>,
+                {
+                    _serde::Deserializer::deserialize_identifier(
+                        __deserializer,
+                        __FieldVisitor,
+                    )
+                }
+            }
+            #[doc(hidden)]
+            struct __Visitor<'de> {
+                marker: _serde::__private::PhantomData<MlError>,
+                lifetime: _serde::__private::PhantomData<&'de ()>,
+            }
+            impl<'de> _serde::de::Visitor<'de> for __Visitor<'de> {
+                type Value = MlError;
+                fn expecting(
+                    &self,
+                    __formatter: &mut _serde::__private::Formatter,
+                ) -> _serde::__private::fmt::Result {
+                    _serde::__private::Formatter::write_str(__formatter, "enum MlError")
+                }
+                fn visit_enum<__A>(
+                    self,
+                    __data: __A,
+                ) -> _serde::__private::Result<Self::Value, __A::Error>
+                where
+                    __A: _serde::de::EnumAccess<'de>,
+                {
+                    match _serde::de::EnumAccess::variant(__data)? {
+                        (__Field::__field0, __variant) => {
+                            _serde::__private::Result::map(
+                                _serde::de::VariantAccess::newtype_variant::<
+                                    String,
+                                >(__variant),
+                                MlError::InvalidModel,
+                            )
+                        }
+                        (__Field::__field1, __variant) => {
+                            _serde::__private::Result::map(
+                                _serde::de::VariantAccess::newtype_variant::<
+                                    String,
+                                >(__variant),
+                                MlError::InvalidEncoding,
+                            )
+                        }
+                        (__Field::__field2, __variant) => {
+                            _serde::__private::Result::map(
+                                _serde::de::VariantAccess::newtype_variant::<
+                                    String,
+                                >(__variant),
+                                MlError::CorruptInputTensor,
+                            )
+                        }
+                        (__Field::__field3, __variant) => {
+                            _serde::__private::Result::map(
+                                _serde::de::VariantAccess::newtype_variant::<
+                                    String,
+                                >(__variant),
+                                MlError::RuntimeError,
+                            )
+                        }
+                        (__Field::__field4, __variant) => {
+                            _serde::__private::Result::map(
+                                _serde::de::VariantAccess::newtype_variant::<
+                                    String,
+                                >(__variant),
+                                MlError::OpenvinoError,
+                            )
+                        }
+                        (__Field::__field5, __variant) => {
+                            _serde::__private::Result::map(
+                                _serde::de::VariantAccess::newtype_variant::<
+                                    String,
+                                >(__variant),
+                                MlError::OnnxError,
+                            )
+                        }
+                        (__Field::__field6, __variant) => {
+                            _serde::__private::Result::map(
+                                _serde::de::VariantAccess::newtype_variant::<
+                                    String,
+                                >(__variant),
+                                MlError::TensorflowError,
+                            )
+                        }
+                        (__Field::__field7, __variant) => {
+                            _serde::__private::Result::map(
+                                _serde::de::VariantAccess::newtype_variant::<
+                                    String,
+                                >(__variant),
+                                MlError::TfliteError,
+                            )
+                        }
+                        (__Field::__field8, __variant) => {
+                            _serde::__private::Result::map(
+                                _serde::de::VariantAccess::newtype_variant::<
+                                    String,
+                                >(__variant),
+                                MlError::ContextNotFoundError,
+                            )
+                        }
+                    }
+                }
+            }
+            #[doc(hidden)]
+            const VARIANTS: &'static [&'static str] = &[
+                "InvalidModel",
+                "InvalidEncoding",
+                "CorruptInputTensor",
+                "RuntimeError",
+                "OpenvinoError",
+                "OnnxError",
+                "TensorflowError",
+                "TfliteError",
+                "ContextNotFoundError",
+            ];
+            _serde::Deserializer::deserialize_enum(
+                __deserializer,
+                "MlError",
+                VARIANTS,
+                __Visitor {
+                    marker: _serde::__private::PhantomData::<MlError>,
+                    lifetime: _serde::__private::PhantomData,
+                },
+            )
+        }
+    }
+};
+/// MessageDispatch ensures that your provider can receive and
+/// process messages sent to it over the lattice
+///
+/// This implementation is a stub and must be filled out by implementers
+///
+/// It would be preferable to use <T: SomeTrait> here, but the fact that  'd like to use
+impl ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::MessageDispatch
+for AiModelProvider {
+    #[allow(
+        clippy::async_yields_async,
+        clippy::diverging_sub_expression,
+        clippy::let_unit_value,
+        clippy::no_effect_underscore_binding,
+        clippy::shadow_same,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds,
+        clippy::used_underscore_binding
+    )]
+    fn dispatch<'a, 'async_trait>(
+        &'a self,
+        ctx: ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::Context,
+        method: String,
+        body: std::borrow::Cow<'a, [u8]>,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<
+                Output = ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::error::InvocationResult<
+                    Vec<u8>,
+                >,
+            > + ::core::marker::Send + 'async_trait,
+        >,
+    >
+    where
+        'a: 'async_trait,
+        Self: 'async_trait,
+    {
+        Box::pin(async move {
+            if let ::core::option::Option::Some(__ret)
+                = ::core::option::Option::None::<
+                    ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::error::InvocationResult<
+                        Vec<u8>,
+                    >,
+                > {
+                return __ret;
+            }
+            let __self = self;
+            let ctx = ctx;
+            let method = method;
+            let body = body;
+            let __ret: ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::error::InvocationResult<
+                Vec<u8>,
+            > = {
+                match method.as_str() {
+                    "Inference.Predict" => {
+                        let input: u32 = ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::deserialize(
+                            &body,
+                        )?;
+                        let result = WamliMlInference::predict(__self, ctx, input).await;
+                        Ok(
+                            ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::serialize(
+                                &result,
+                            )?,
+                        )
+                    }
+                    "Inference.FakeIt" => {
+                        let result = WamliMlInference::fake_it(__self, ctx).await;
+                        Ok(
+                            ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::serialize(
+                                &result,
+                            )?,
+                        )
+                    }
+                    _ => {
+                        Err(
+                            ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::error::InvocationError::Malformed({
+                                    let res = ::alloc::fmt::format(
+                                        format_args!("Invalid method name {0}", method),
+                                    );
+                                    res
+                                })
+                                .into(),
+                        )
+                    }
+                }
+            };
+            #[allow(unreachable_code)] __ret
+        })
+    }
+}
+/// This trait categorizes all wasmCloud lattice compatible providers.
+///
+/// It is a mirror of ProviderHandler for the purposes of ensuring that
+/// at least the following members are is supported.
+trait WasmcloudCapabilityProvider {
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn put_link<'life0, 'life1, 'async_trait>(
+        &'life0 self,
+        ld: &'life1 ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::core::LinkDefinition,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<
+                Output = bool,
+            > + ::core::marker::Send + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        Self: 'async_trait;
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn delete_link<'life0, 'life1, 'async_trait>(
+        &'life0 self,
+        actor_id: &'life1 str,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        Self: 'async_trait;
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn shutdown<'life0, 'async_trait>(
+        &'life0 self,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait;
+}
+/// ProviderHandler ensures that your provider handles the basic
+/// required functionality of all Providers on a wasmCloud lattice.
+///
+/// This implementation is a stub and must be filled out by implementers
+impl ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::ProviderHandler
+for AiModelProvider {
+    #[allow(
+        clippy::async_yields_async,
+        clippy::diverging_sub_expression,
+        clippy::let_unit_value,
+        clippy::no_effect_underscore_binding,
+        clippy::shadow_same,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds,
+        clippy::used_underscore_binding
+    )]
+    fn put_link<'life0, 'life1, 'async_trait>(
+        &'life0 self,
+        ld: &'life1 ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::core::LinkDefinition,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<
+                Output = bool,
+            > + ::core::marker::Send + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        Self: 'async_trait,
+    {
+        Box::pin(async move {
+            if let ::core::option::Option::Some(__ret)
+                = ::core::option::Option::None::<bool> {
+                return __ret;
+            }
+            let __self = self;
+            let __ret: bool = {
+                WasmcloudCapabilityProvider::put_link(__self, ld).await
+            };
+            #[allow(unreachable_code)] __ret
+        })
+    }
+    #[allow(
+        clippy::async_yields_async,
+        clippy::diverging_sub_expression,
+        clippy::let_unit_value,
+        clippy::no_effect_underscore_binding,
+        clippy::shadow_same,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds,
+        clippy::used_underscore_binding
+    )]
+    fn delete_link<'life0, 'life1, 'async_trait>(
+        &'life0 self,
+        actor_id: &'life1 str,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        Self: 'async_trait,
+    {
+        Box::pin(async move {
+            let __self = self;
+            let () = {
+                WasmcloudCapabilityProvider::delete_link(__self, actor_id).await
+            };
+        })
+    }
+    #[allow(
+        clippy::async_yields_async,
+        clippy::diverging_sub_expression,
+        clippy::let_unit_value,
+        clippy::no_effect_underscore_binding,
+        clippy::shadow_same,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds,
+        clippy::used_underscore_binding
+    )]
+    fn shutdown<'life0, 'async_trait>(
+        &'life0 self,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        Box::pin(async move {
+            let __self = self;
+            let () = { WasmcloudCapabilityProvider::shutdown(__self).await };
+        })
+    }
+}
+/// Given the implementation of ProviderHandler and MessageDispatch,
+/// the implementation for your struct is a guaranteed
+impl ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::Provider
+for AiModelProvider {}
+/// This handler serves to be used for individual invocations of the actor
+/// as performed by the host runtime
+///
+/// Interfaces imported by the provider can use this to send traffic across the lattice
+pub struct InvocationHandler<'a> {
+    ld: &'a ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::core::LinkDefinition,
+}
+impl<'a> InvocationHandler<'a> {
+    pub fn new(
+        ld: &'a ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::core::LinkDefinition,
+    ) -> Self {
+        Self { ld }
+    }
+    async fn get_data(
+        &self,
+    ) -> ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::error::InvocationResult<
+        (),
+    > {
+        let connection = ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::provider_main::get_connection();
+        let client = connection.get_rpc_client();
+        let response = client
+            .send(
+                ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::core::WasmCloudEntity {
+                    public_key: self.ld.provider_id.clone(),
+                    link_name: self.ld.link_name.clone(),
+                    contract_id: "wamli:ml".to_string(),
+                },
+                ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::core::WasmCloudEntity {
+                    public_key: self.ld.actor_id.clone(),
+                    ..Default::default()
+                },
+                "Model.GetData",
+                ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::serialize(
+                    &(),
+                )?,
+            )
+            .await?;
+        if let Some(err) = response.error {
+            Err(
+                ::wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::error::InvocationError::Unexpected(
+                    err.to_string(),
+                ),
+            )
+        } else {
+            Ok(())
+        }
+    }
+}
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let hd = load_host_data()?;
+    start_provider(
+        AiModelProvider::new("DUMMY"),
+        Some("kv-redis-provider".to_string()),
+    )?;
+    {
+        ::std::io::_eprint(format_args!("KVRedis provider exiting\n"));
+    };
+    Ok(())
+}
+/// Redis keyValue provider implementation.
+struct AiModelProvider {
+    actors: Arc<RwLock<HashMap<String, RwLock<ConnectionManager>>>>,
+    default_connect_url: String,
+}
+#[automatically_derived]
+impl ::core::default::Default for AiModelProvider {
+    #[inline]
+    fn default() -> AiModelProvider {
+        AiModelProvider {
+            actors: ::core::default::Default::default(),
+            default_connect_url: ::core::default::Default::default(),
+        }
+    }
+}
+#[automatically_derived]
+impl ::core::clone::Clone for AiModelProvider {
+    #[inline]
+    fn clone(&self) -> AiModelProvider {
+        AiModelProvider {
+            actors: ::core::clone::Clone::clone(&self.actors),
+            default_connect_url: ::core::clone::Clone::clone(&self.default_connect_url),
+        }
+    }
+}
+impl AiModelProvider {
+    fn new(default_connect_url: &str) -> Self {
+        AiModelProvider {
+            default_connect_url: default_connect_url.to_string(),
+            ..Default::default()
+        }
+    }
+}
+/// Handle provider control commands
+/// put_link (new actor link command), del_link (remove link command), and shutdown
+impl WasmcloudCapabilityProvider for AiModelProvider {
+    /// Provider should perform any operations needed for a new link,
+    /// including setting up per-actor resources, and checking authorization.
+    /// If the link is allowed, return true, otherwise return false to deny the link.
+    #[allow(
+        clippy::async_yields_async,
+        clippy::diverging_sub_expression,
+        clippy::let_unit_value,
+        clippy::no_effect_underscore_binding,
+        clippy::shadow_same,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds,
+        clippy::used_underscore_binding
+    )]
+    fn put_link<'life0, 'life1, 'async_trait>(
+        &'life0 self,
+        ld: &'life1 LinkDefinition,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<
+                Output = bool,
+            > + ::core::marker::Send + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        Self: 'async_trait,
+    {
+        Box::pin(async move {
+            let __tracing_attr_span = {
+                use ::tracing::__macro_support::Callsite as _;
+                static __CALLSITE: ::tracing::callsite::DefaultCallsite = {
+                    static META: ::tracing::Metadata<'static> = {
+                        ::tracing_core::metadata::Metadata::new(
+                            "put_link",
+                            "wamlifake",
+                            tracing::Level::DEBUG,
+                            ::core::option::Option::Some(
+                                "fake-provider/src/bin/wamlifake.rs",
+                            ),
+                            ::core::option::Option::Some(74u32),
+                            ::core::option::Option::Some("wamlifake"),
+                            ::tracing_core::field::FieldSet::new(
+                                &["actor_id"],
+                                ::tracing_core::callsite::Identifier(&__CALLSITE),
+                            ),
+                            ::tracing::metadata::Kind::SPAN,
+                        )
+                    };
+                    ::tracing::callsite::DefaultCallsite::new(&META)
+                };
+                let mut interest = ::tracing::subscriber::Interest::never();
+                if tracing::Level::DEBUG <= ::tracing::level_filters::STATIC_MAX_LEVEL
+                    && tracing::Level::DEBUG
+                        <= ::tracing::level_filters::LevelFilter::current()
+                    && {
+                        interest = __CALLSITE.interest();
+                        !interest.is_never()
+                    }
+                    && ::tracing::__macro_support::__is_enabled(
+                        __CALLSITE.metadata(),
+                        interest,
+                    )
+                {
+                    let meta = __CALLSITE.metadata();
+                    ::tracing::Span::new(
+                        meta,
+                        &{
+                            #[allow(unused_imports)]
+                            use ::tracing::field::{debug, display, Value};
+                            let mut iter = meta.fields().iter();
+                            meta.fields()
+                                .value_set(
+                                    &[
+                                        (
+                                            &::core::iter::Iterator::next(&mut iter)
+                                                .expect("FieldSet corrupted (this is a bug)"),
+                                            ::core::option::Option::Some(
+                                                &display(&ld.actor_id) as &dyn Value,
+                                            ),
+                                        ),
+                                    ],
+                                )
+                        },
+                    )
+                } else {
+                    let span = ::tracing::__macro_support::__disabled_span(
+                        __CALLSITE.metadata(),
+                    );
+                    if (match tracing::Level::DEBUG {
+                        ::tracing::Level::ERROR => ::tracing::log::Level::Error,
+                        ::tracing::Level::WARN => ::tracing::log::Level::Warn,
+                        ::tracing::Level::INFO => ::tracing::log::Level::Info,
+                        ::tracing::Level::DEBUG => ::tracing::log::Level::Debug,
+                        _ => ::tracing::log::Level::Trace,
+                    }) <= ::tracing::log::STATIC_MAX_LEVEL
+                    {
+                        if !::tracing::dispatcher::has_been_set() {
+                            {
+                                span.record_all(
+                                    &{
+                                        #[allow(unused_imports)]
+                                        use ::tracing::field::{debug, display, Value};
+                                        let mut iter = __CALLSITE.metadata().fields().iter();
+                                        __CALLSITE
+                                            .metadata()
+                                            .fields()
+                                            .value_set(
+                                                &[
+                                                    (
+                                                        &::core::iter::Iterator::next(&mut iter)
+                                                            .expect("FieldSet corrupted (this is a bug)"),
+                                                        ::core::option::Option::Some(
+                                                            &display(&ld.actor_id) as &dyn Value,
+                                                        ),
+                                                    ),
+                                                ],
+                                            )
+                                    },
+                                );
+                            }
+                        } else {
+                            {}
+                        }
+                    } else {
+                        {}
+                    };
+                    span
+                }
+            };
+            let __tracing_instrument_future = async move {
+                if let ::core::option::Option::Some(__ret)
+                    = ::core::option::Option::None::<bool> {
+                    return __ret;
+                }
+                let __self = self;
+                let __ret: bool = {
+                    let ih = InvocationHandler::new(ld);
+                    let x = ih.get_data().await.unwrap();
+                    true
+                };
+                #[allow(unreachable_code)] __ret
+            };
+            if !__tracing_attr_span.is_disabled() {
+                tracing::Instrument::instrument(
+                        __tracing_instrument_future,
+                        __tracing_attr_span,
+                    )
+                    .await
+            } else {
+                __tracing_instrument_future.await
+            }
+        })
+    }
+    /// Handle notification that a link is dropped - close the connection
+    #[allow(
+        clippy::async_yields_async,
+        clippy::diverging_sub_expression,
+        clippy::let_unit_value,
+        clippy::no_effect_underscore_binding,
+        clippy::shadow_same,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds,
+        clippy::used_underscore_binding
+    )]
+    fn delete_link<'life0, 'life1, 'async_trait>(
+        &'life0 self,
+        actor_id: &'life1 str,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        Self: 'async_trait,
+    {
+        Box::pin(async move {
+            let __tracing_attr_span = {
+                use ::tracing::__macro_support::Callsite as _;
+                static __CALLSITE: ::tracing::callsite::DefaultCallsite = {
+                    static META: ::tracing::Metadata<'static> = {
+                        ::tracing_core::metadata::Metadata::new(
+                            "delete_link",
+                            "wamlifake",
+                            tracing::Level::INFO,
+                            ::core::option::Option::Some(
+                                "fake-provider/src/bin/wamlifake.rs",
+                            ),
+                            ::core::option::Option::Some(82u32),
+                            ::core::option::Option::Some("wamlifake"),
+                            ::tracing_core::field::FieldSet::new(
+                                &["actor_id"],
+                                ::tracing_core::callsite::Identifier(&__CALLSITE),
+                            ),
+                            ::tracing::metadata::Kind::SPAN,
+                        )
+                    };
+                    ::tracing::callsite::DefaultCallsite::new(&META)
+                };
+                let mut interest = ::tracing::subscriber::Interest::never();
+                if tracing::Level::INFO <= ::tracing::level_filters::STATIC_MAX_LEVEL
+                    && tracing::Level::INFO
+                        <= ::tracing::level_filters::LevelFilter::current()
+                    && {
+                        interest = __CALLSITE.interest();
+                        !interest.is_never()
+                    }
+                    && ::tracing::__macro_support::__is_enabled(
+                        __CALLSITE.metadata(),
+                        interest,
+                    )
+                {
+                    let meta = __CALLSITE.metadata();
+                    ::tracing::Span::new(
+                        meta,
+                        &{
+                            #[allow(unused_imports)]
+                            use ::tracing::field::{debug, display, Value};
+                            let mut iter = meta.fields().iter();
+                            meta.fields()
+                                .value_set(
+                                    &[
+                                        (
+                                            &::core::iter::Iterator::next(&mut iter)
+                                                .expect("FieldSet corrupted (this is a bug)"),
+                                            ::core::option::Option::Some(&actor_id as &dyn Value),
+                                        ),
+                                    ],
+                                )
+                        },
+                    )
+                } else {
+                    let span = ::tracing::__macro_support::__disabled_span(
+                        __CALLSITE.metadata(),
+                    );
+                    if (match tracing::Level::INFO {
+                        ::tracing::Level::ERROR => ::tracing::log::Level::Error,
+                        ::tracing::Level::WARN => ::tracing::log::Level::Warn,
+                        ::tracing::Level::INFO => ::tracing::log::Level::Info,
+                        ::tracing::Level::DEBUG => ::tracing::log::Level::Debug,
+                        _ => ::tracing::log::Level::Trace,
+                    }) <= ::tracing::log::STATIC_MAX_LEVEL
+                    {
+                        if !::tracing::dispatcher::has_been_set() {
+                            {
+                                span.record_all(
+                                    &{
+                                        #[allow(unused_imports)]
+                                        use ::tracing::field::{debug, display, Value};
+                                        let mut iter = __CALLSITE.metadata().fields().iter();
+                                        __CALLSITE
+                                            .metadata()
+                                            .fields()
+                                            .value_set(
+                                                &[
+                                                    (
+                                                        &::core::iter::Iterator::next(&mut iter)
+                                                            .expect("FieldSet corrupted (this is a bug)"),
+                                                        ::core::option::Option::Some(&actor_id as &dyn Value),
+                                                    ),
+                                                ],
+                                            )
+                                    },
+                                );
+                            }
+                        } else {
+                            {}
+                        }
+                    } else {
+                        {}
+                    };
+                    span
+                }
+            };
+            let __tracing_instrument_future = async move {
+                let __self = self;
+                let () = {
+                    let mut _aw = __self.actors.write().await;
+                };
+            };
+            if !__tracing_attr_span.is_disabled() {
+                tracing::Instrument::instrument(
+                        __tracing_instrument_future,
+                        __tracing_attr_span,
+                    )
+                    .await
+            } else {
+                __tracing_instrument_future.await
+            }
+        })
+    }
+    /// Handle shutdown request by closing all connections
+    #[allow(
+        clippy::async_yields_async,
+        clippy::diverging_sub_expression,
+        clippy::let_unit_value,
+        clippy::no_effect_underscore_binding,
+        clippy::shadow_same,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds,
+        clippy::used_underscore_binding
+    )]
+    fn shutdown<'life0, 'async_trait>(
+        &'life0 self,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        Box::pin(async move {
+            let __self = self;
+            let () = {
+                let mut _aw = __self.actors.write().await;
+            };
+        })
+    }
+}
+impl WamliMlInference for AiModelProvider {
+    #[allow(
+        clippy::async_yields_async,
+        clippy::diverging_sub_expression,
+        clippy::let_unit_value,
+        clippy::no_effect_underscore_binding,
+        clippy::shadow_same,
+        clippy::type_complexity,
+        clippy::type_repetition_in_bounds,
+        clippy::used_underscore_binding
+    )]
+    fn fake_it<'life0, 'async_trait>(
+        &'life0 self,
+        _ctx: Context,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<
+                Output = bool,
+            > + ::core::marker::Send + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        Box::pin(async move {
+            if let ::core::option::Option::Some(__ret)
+                = ::core::option::Option::None::<bool> {
+                return __ret;
+            }
+            let __self = self;
+            let _ctx = _ctx;
+            let __ret: bool = { true };
+            #[allow(unreachable_code)] __ret
+        })
+    }
+}
