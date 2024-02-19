@@ -20,25 +20,18 @@ use wasmcloud_provider_wit_bindgen::deps::{
     wasmcloud_provider_sdk::{load_host_data, Context},
 };
 
+
 wasmcloud_provider_wit_bindgen::generate!({
     impl_struct: AiModelProvider,
-    contract: "wamli:fake",
-    wit_bindgen_cfg: "wamli-fake"
+    contract: "wamli:ai",
+    wit_bindgen_cfg: "wamli-ai"
 });
 
-wasmtime::component::bindgen!({
-    // path: "wit/provider-kvredis.wit",
-    world: "wamli-ai",
-    async: true,
-});
-
-// #[derive(Deserialize)]
-// #[serde(crate = "wasmcloud_provider_wit_bindgen::deps::serde")]
-// struct KvRedisConfig {
-//     /// Default URL to connect when actor doesn't provide one on a link
-//     #[serde(alias = "URL", alias = "Url")]
-//     url: String,
-// }
+// wasmtime::component::bindgen!({
+//     // path: "wit/provider-kvredis.wit",
+//     world: "wamli-ai",
+//     async: true,
+// });
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let hd = load_host_data()?;
@@ -63,6 +56,7 @@ struct AiModelProvider {
 
 impl AiModelProvider {
     fn new(default_connect_url: &str) -> Self {
+        // let _ = get_data();
         AiModelProvider {
             default_connect_url: default_connect_url.to_string(),
             ..Default::default()
@@ -79,6 +73,8 @@ impl WasmcloudCapabilityProvider for AiModelProvider {
     /// If the link is allowed, return true, otherwise return false to deny the link.
     #[instrument(level = "debug", skip(self, ld), fields(actor_id = %ld.actor_id))]
     async fn put_link(&self, ld: &LinkDefinition) -> bool {
+        let ih = InvocationHandler::new(ld);
+        let x = ih.get_data().await.unwrap();
         true
     }
 
@@ -91,5 +87,12 @@ impl WasmcloudCapabilityProvider for AiModelProvider {
     /// Handle shutdown request by closing all connections
     async fn shutdown(&self) {
         let mut _aw = self.actors.write().await;
+    }
+}
+
+#[async_trait]
+impl WamliAiIt for AiModelProvider {
+    async fn fake_it(&self, _ctx: Context) -> bool {
+        true
     }
 }
