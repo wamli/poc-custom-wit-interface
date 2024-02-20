@@ -1,3 +1,5 @@
+// package wamli:ml;
+
 interface types {
    // use wasi:io/streams@0.2.0.{input-stream, output-stream};
    enum execution-target {

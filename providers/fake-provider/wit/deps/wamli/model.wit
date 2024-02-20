@@ -1,8 +1,9 @@
-package wamli:ml;
+// package wamli:ml;
 
 // An interface for receiving (immutable) state from an actor
 interface model {
 
+   // use foo:bar/types.{
    use types.{
       execution-target,
       value-type,
@@ -10,14 +11,14 @@ interface model {
       ml-error,
    };
 
-    record metadata {
-       model-name: string,
-       graph-encoding: string,
-       execution-target: execution-target,
-       tensor-type: value-type,
-       tensor-dimensions-in: dimensions,
-       tensor-dimensions-out: dimensions,
-    }
+   record metadata {
+      model-name: string,
+      graph-encoding: string,
+      execution-target: execution-target,
+      tensor-type: value-type,
+      tensor-dimensions-in: dimensions,
+      tensor-dimensions-out: dimensions,
+   }
  
    //  // either receive data (state) or some metadata describing the data
   // get-data: func() -> result<list<u8>, string>;

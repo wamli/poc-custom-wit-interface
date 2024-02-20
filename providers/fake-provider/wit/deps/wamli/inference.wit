@@ -1,8 +1,9 @@
-package wamli:ml;
+// package wamli:ml;
 
 // An interface for receiving (immutable) state from an actor
 interface inference {
    
+
    use types.{
       tensor,
       status,
@@ -22,5 +23,5 @@ interface inference {
    predict: func(input: inference-input) -> inference-output;
    // predict: func(input: u32) -> bool;
    
-   fake-it: func() -> bool;
+   // fake-it: func() -> bool;
 }

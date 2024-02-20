@@ -24,30 +24,11 @@ use wasmcloud_provider_wit_bindgen::deps::{
 wasmcloud_provider_wit_bindgen::generate!({
     impl_struct: AiModelProvider,
     contract: "wamli:ml",
-    wit_bindgen_cfg: "wamli-ml"
+    wit_bindgen_cfg: "wamli-mlprovider"
 });
 
-// wasmtime::component::bindgen!({
-//     // path: "wit/provider-kvredis.wit",
-//     world: "wamli-ai",
-//     async: true,
-// });
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let hd = load_host_data()?;
-
-    start_provider(
-        AiModelProvider::new("DUMMY"),
-        Some("kv-redis-provider".to_string()),
-    )?;
-
-    eprintln!("KVRedis provider exiting");
-    Ok(())
-}
-
-/// Redis keyValue provider implementation.
 #[derive(Default, Clone)]
-struct AiModelProvider {
+pub struct AiModelProvider {
     // store redis connections per actor
     actors: Arc<RwLock<HashMap<String, RwLock<ConnectionManager>>>>,
     // Default connection URL for actors without a `URL` link value
@@ -74,7 +55,7 @@ impl WasmcloudCapabilityProvider for AiModelProvider {
     #[instrument(level = "debug", skip(self, ld), fields(actor_id = %ld.actor_id))]
     async fn put_link(&self, ld: &LinkDefinition) -> bool {
         let ih = InvocationHandler::new(ld);
-        let x = ih.get_data().await.unwrap();
+        // let x = ih.get_data().await.unwrap();
         true
     }
 
@@ -92,13 +73,13 @@ impl WasmcloudCapabilityProvider for AiModelProvider {
 
 #[async_trait]
 impl WamliMlInference for AiModelProvider {
-    async fn fake_it(&self, _ctx: Context) -> bool {
-        true
-    }
+    // async fn fake_it(&self, _ctx: Context) -> bool {
+    //     true
+    // }
 
     async fn predict(&self, _ctx: Context, _input: InferenceInput) -> InferenceOutput {
         let tensor = Tensor {
-            dimensions: [1, 2, 3],
+            dimensions: vec![1, 2, 3],
             value_types: vec![],
             bit_flags: 0,
             data: vec![],
