@@ -20,6 +20,8 @@ use wasmcloud_provider_wit_bindgen::deps::{
     wasmcloud_provider_sdk::{load_host_data, Context},
 };
 
+// workaround to make the following macro compile
+wasmtime::component::bindgen!("wamli-mlprovider");
 
 wasmcloud_provider_wit_bindgen::generate!({
     impl_struct: AiModelProvider,
@@ -36,7 +38,7 @@ pub struct AiModelProvider {
 }
 
 impl AiModelProvider {
-    fn new(default_connect_url: &str) -> Self {
+    pub fn new(default_connect_url: &str) -> Self {
         // let _ = get_data();
         AiModelProvider {
             default_connect_url: default_connect_url.to_string(),

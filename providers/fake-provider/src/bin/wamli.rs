@@ -1,6 +1,6 @@
 use wasmcloud_provider_wit_bindgen::deps::wasmcloud_provider_sdk::{start_provider, load_host_data};
 
-use crate::AiModelProvider;
+use wamli_fake_provider::AiModelProvider;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let hd = load_host_data()?;
