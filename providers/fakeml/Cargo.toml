@@ -1,0 +1,15 @@
+[package]
+name = "fakeml"
+version = "0.1.0"
+
+authors = ["Christoph Brewing <christoph.brewing@wamli.dev>"]
+categories = ["wasm"]
+edition = "2021"
+license = "Apache-2.0"
+resolver = "2"
+
+[dependencies]
+tokio = { version = "1", default-features = false }
+tracing = { version = "0.1", default-features = false }
+wasmcloud-provider-wit-bindgen = { path = "../../../../wasmcloud/wasmCloud/crates/provider-wit-bindgen", default-features = false }
+wasmtime = { version = "17.0.0", features = ["async", "component-model"] }

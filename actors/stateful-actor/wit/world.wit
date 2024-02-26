@@ -1,7 +1,0 @@
-package wamli:adaptor;
-
-world interfaces {
-  import wasmcloud:bus/host;
-  
-  export wamli:ai/model;
-}
