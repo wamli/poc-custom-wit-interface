@@ -1,0 +1,6 @@
+name = "Fake ML"
+language = "rust"
+type = "provider"
+
+[provider]
+vendor = "wamli"

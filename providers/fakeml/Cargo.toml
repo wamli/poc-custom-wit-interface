@@ -9,7 +9,15 @@ license = "Apache-2.0"
 resolver = "2"
 
 [dependencies]
+log = "0.4.20"
+anyhow = "1.0.82"
+tracing-log = "0.2.0"
+async-nats = "0.33.0"
+# wasmcloud-control-interface = "0.33.0"
 tokio = { version = "1", default-features = false }
+serde = { version = "1.0.197" , features = ["derive"] }
 tracing = { version = "0.1", default-features = false }
-wasmcloud-provider-wit-bindgen = { path = "../../../../wasmcloud/wasmCloud/crates/provider-wit-bindgen", default-features = false }
-wasmtime = { version = "17.0.0", features = ["async", "component-model"] }
+# wasmcloud-provider-wit-bindgen = { git = "https://github.com/wasmcloud/wasmcloud.git", rev = "5a3a37af8c4051989e0fcc9c965668a7a7d0599f" }
+# wasmtime = { version = "17.0.0", features = ["async", "component-model"] }
+wasmcloud-provider-sdk = "0.5.0"
+wit-bindgen-wrpc = "0.3.7"

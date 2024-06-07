@@ -1,5 +1,12 @@
 #!/bin/bash
 
+## INITIALIZE
+export LANG=en_US.UTF-8
+
+EXEC_PATH=`dirname "$0"`
+EXEC_PATH=`( cd "$EXEC_PATH" && pwd )`
+echo This script executes from $EXEC_PATH
+
 ##
 #   REMOTE REGISTRY 
 ##
@@ -10,25 +17,30 @@ REMOTE_REG_SERVER=wasmcloud.azurecr.io
 #   CAPABILITY PROVIDERS
 ##
 
-HTTPSERVER=httpserver:0.19.1
+# HTTPSERVER=httpserver:0.19.1
+HTTPSERVER=http-server:0.20.0
 REMOTE_HTTPSERVER=$REMOTE_REG_SERVER/$HTTPSERVER
-HTTP_PROVIDER_FILE=images/httpserver.par.gz
+# HTTP_PROVIDER_FILE=$EXEC_PATH/../images/httpserver.par.gz
+HTTP_PROVIDER_FILE=$EXEC_PATH/../images/http-server.par.gz
 
 FAKE_ML=fakeml:0.1.0
-FAKE_ML_PROVIDER_FILE=providers//build/fakeml.par
+FAKE_ML_PROVIDER_FILE=$EXEC_PATH/../providers/fakeml/build/fakeml.par.gz
 
 ##
 #   ACTORS
 ##
 
 ECHO_ACTOR=echo:0.3.4
-ECHO_ACTOR_FILE=images/echo.wasm
+ECHO_ACTOR_FILE=$EXEC_PATH/../images/echo.wasm
+
+HELLOWORLD_ACTOR=http-hello-world:0.1.0
+HELLOWORLD_ACTOR_FILE=/home/finnfalter/git/wasmcloud/wasmCloud/examples/rust/actors/http-hello-world/build/http_hello_world_s.wasm
 
 API_ACTOR=api:0.1.0
-API_ACTOR_FILE=actors/api/build/api_s.wasm
+API_ACTOR_FILE=$EXEC_PATH/../actors/api/build/api_s.wasm
 
 SQUEEZENET_MODEL_ACTOR=squeezenet_model:0.1.0
-SQUEEZENET_MODEL_ACTOR_FILE=../poc-actor-from-ai-model/model/build/model_s.wasm
+SQUEEZENET_MODEL_ACTOR_FILE=$EXEC_PATH/../actors/model/build/model_s.wasm
 
 
 ##
@@ -113,7 +125,7 @@ push_artefact() {
          break
       else
          # The file does not exist, print an error message
-         echo "Error: File '$local_file' does not exist."
+         echo "File '$local_file' does not exist."
       fi
 
       pushd images
@@ -126,7 +138,7 @@ push_artefact() {
 
 show_images() {
    local local_registry="$1"
-   echo -n "The following images are in $1/v2: "
+   echo -n "\nThe following images are in $1/v2: "
    # curl -sX GET "http://localhost:5000/v2/_catalog"
    curl -sX GET "http://${local_registry}/v2/_catalog"
 }
@@ -145,6 +157,7 @@ push_artefact $HTTPSERVER $HTTP_PROVIDER_FILE
 push_artefact $API_ACTOR $API_ACTOR_FILE
 push_artefact $FAKE_ML $FAKE_ML_PROVIDER_FILE
 push_artefact $SQUEEZENET_MODEL_ACTOR $SQUEEZENET_MODEL_ACTOR_FILE
+push_artefact $HELLOWORLD_ACTOR $HELLOWORLD_ACTOR_FILE
 
 show_images $LOCAL_REG_SERVER
 

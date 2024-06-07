@@ -2,5 +2,5 @@ package wamli:mlprovider;
 
 world wamli-mlprovider {
    export wamli:ml/inference;
-   import wamli:ml/model;
+   // import wamli:ml/model;
 }

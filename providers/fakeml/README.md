@@ -5,7 +5,7 @@ cargo build --release
 
 # using wash par create, e.g.
 wash par create --capid wamli:mlinference --vendor wamli --name fakeml --arch x86_64-linux --binary ../target/release/wamli
-mv build/wamli.par build/fakeml.par
+mv wamli.par build/fakeml.par
 ```
 
 ## Run

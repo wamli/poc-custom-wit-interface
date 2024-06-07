@@ -5,41 +5,46 @@ metadata:
   annotations:
     version: v0.1.0
     description: "Model on demand"
-    experimental: true
+    # experimental: true
 spec:
   components:
     - name: api
-      type: actor
+      type: component
       properties:
         # TODO: you must replace the path below to match your genreated code in build
         # Try using `wash build -o json` and use the `actor_path` field, prepended with `file://`
-        image: file:///home/finnfalter/git/wamli/poc-actor-on-demand/actors/api/build/api_s.wasm
+        image: file:///home/finnfalter/git/wamli/poc-custom-wit-interface/actors/api/build/api_s.wasm
+        # image: file:///home/finnfalter/git/wasmcloud/wasmCloud/examples/rust/actors/http-hello-world/build/http_hello_world_s.wasm
+        id: api
       traits:
         # Govern the spread/scheduling of the actor
         - type: spreadscaler
           properties:
             replicas: 1
-        # Link the HTTP server, and inform it to listen on port 8081
-        # on the local machine
-        - type: linkdef
-          properties:
-            target: httpserver
-            values:
-              ADDRESS: 127.0.0.1:8081
-        - type: linkdef
+        - type: link
           properties:
             target: fakeml
-            values:
-              squeezenet_model: localhost:5000/v2/squeezenet_model:0.1.0
-
+            namespace: wamli
+            package: ml
+            interfaces: [inference]
+            
     - name: httpserver
       type: capability
       properties:
-        image: localhost:5000/v2/httpserver:0.19.1
-        contract: wasmcloud:httpserver
-    # The new capability provider
+        image: localhost:5000/v2/http-server:0.20.0
+      traits: 
+        - type: link
+          properties: 
+            target: api
+            namespace: wasi
+            package: http
+            interfaces: [incoming-handler] 
+            source_config: 
+              - name: default-http
+                properties: 
+                  ADDRESS: 127.0.0.1:8081
+
     - name: fakeml
       type: capability
       properties:
         image: localhost:5000/v2/fakeml:0.1.0
-        contract: wamli:mlinference

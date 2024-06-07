@@ -1,8 +1,13 @@
-name = "http-hello-world"
+name = "api"
 language = "rust"
 type = "actor"
 version = "0.1.0"
 
 [actor]
-wit_world = "hello"
+wit_world = "api"
 wasm_target = "wasm32-wasi-preview2"
+
+claims = [
+  "wasmcloud:httpserver",
+  "wamli:mlinference",
+]

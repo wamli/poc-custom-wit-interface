@@ -12,6 +12,8 @@ This is a simple Rust Wasm example that responds with a "Hello World" message fo
 
 ```bash
 wash build
+
+wash inspect --wit build/api_s.wasm
 ```
 
 ## Running with wasmtime

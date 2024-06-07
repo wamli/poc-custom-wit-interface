@@ -20,7 +20,8 @@ interface inference {
       tensor: tensor,   
    }
    
-   predict: func(input: inference-input) -> inference-output;
+   predict: func(input: string) -> string;
+   // predict: func(input: inference-input) -> inference-output;
    // predict: func(input: u32) -> bool;
    
    // fake-it: func() -> bool;
