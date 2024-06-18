@@ -11,14 +11,15 @@ echo This script executes from $EXEC_PATH
 #   REMOTE REGISTRY 
 ##
 
-REMOTE_REG_SERVER=wasmcloud.azurecr.io
+# REMOTE_REG_SERVER=wasmcloud.azurecr.io
+REMOTE_REG_SERVER=ghcr.io/wasmcloud
 
 ##
 #   CAPABILITY PROVIDERS
 ##
 
 # HTTPSERVER=httpserver:0.19.1
-HTTPSERVER=http-server:0.20.0
+HTTPSERVER=http-server:0.21.0
 REMOTE_HTTPSERVER=$REMOTE_REG_SERVER/$HTTPSERVER
 # HTTP_PROVIDER_FILE=$EXEC_PATH/../images/httpserver.par.gz
 HTTP_PROVIDER_FILE=$EXEC_PATH/../images/http-server.par.gz
