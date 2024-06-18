@@ -1,0 +1,23 @@
+// An interface for receiving (immutable) state from an actor
+interface conversion {   
+   use types.{
+      tensor,
+      dimensions,
+      value-type,
+      status,
+   };
+
+   record conversion-request {
+      tensor: tensor,
+      target-dimensions: option<dimensions>,
+      target-value: option<value-type>,
+   }
+
+   record conversion-response {
+      status: status,
+      tensor: tensor,   
+   }
+   
+   convert: func(input: conversion-request) -> conversion-response;
+}
+

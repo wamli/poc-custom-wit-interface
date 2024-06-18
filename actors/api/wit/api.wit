@@ -1,7 +1,10 @@
-package wamli:http;
+package wamli:mlinference;
 
 world api {
+  import wasi:logging/logging;
   import wamli:ml/inference;
+  import wamli:ml/conversion;
+
   export wasi:http/incoming-handler@0.2.0;
 }
 

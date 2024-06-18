@@ -2,6 +2,14 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+
+/// Default URL to use to connect to registry
+const DEFAULT_CONNECT_URL: &str = "localhost:5000";
+
+/// Configuration key that will be used to search for config url
+const CONFIG_URL_KEY: &str = "URL";
+
+
 /// Configuration for this provider, which is passed to the provider from the host.
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProviderConfig {

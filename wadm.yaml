@@ -11,13 +11,9 @@ spec:
     - name: api
       type: component
       properties:
-        # TODO: you must replace the path below to match your genreated code in build
-        # Try using `wash build -o json` and use the `actor_path` field, prepended with `file://`
         image: file:///home/finnfalter/git/wamli/poc-custom-wit-interface/actors/api/build/api_s.wasm
-        # image: file:///home/finnfalter/git/wasmcloud/wasmCloud/examples/rust/actors/http-hello-world/build/http_hello_world_s.wasm
         id: api
       traits:
-        # Govern the spread/scheduling of the actor
         - type: spreadscaler
           properties:
             replicas: 1
@@ -27,7 +23,22 @@ spec:
             namespace: wamli
             package: ml
             interfaces: [inference]
-            
+        - type: link
+          properties:
+            target: preprocessor
+            namespace: wamli
+            package: ml
+            interfaces: [conversion]
+    - name: preprocessor
+      type: component
+      properties:
+        image: file:///home/finnfalter/git/wamli/poc-custom-wit-interface/actors/preprocessor/build/preprocessor_s.wasm
+        id: preprocessor
+      traits:
+        - type: spreadscaler
+          properties:
+            replicas: 1
+
     - name: httpserver
       type: capability
       properties:
@@ -48,3 +59,8 @@ spec:
       type: capability
       properties:
         image: localhost:5000/v2/fakeml:0.1.0
+        id: fakeml
+        config:
+          - name: registry-url
+            properties:
+              url: localhost:5000

@@ -39,6 +39,9 @@ HELLOWORLD_ACTOR_FILE=/home/finnfalter/git/wasmcloud/wasmCloud/examples/rust/act
 API_ACTOR=api:0.1.0
 API_ACTOR_FILE=$EXEC_PATH/../actors/api/build/api_s.wasm
 
+PREPROCESSOR_ACTOR=preprocessor:0.1.0
+PREPROCESSOR_ACTOR_FILE=$EXEC_PATH/../actors/preprocessor/build/preprocessor_s.wasm
+
 SQUEEZENET_MODEL_ACTOR=squeezenet_model:0.1.0
 SQUEEZENET_MODEL_ACTOR_FILE=$EXEC_PATH/../actors/model/build/model_s.wasm
 
@@ -153,7 +156,7 @@ stop_local_registry
 start_local_registry
 
 push_artefact $HTTPSERVER $HTTP_PROVIDER_FILE
-# push_artefact $ECHO_ACTOR $ECHO_ACTOR_FILE
+push_artefact $PREPROCESSOR_ACTOR $PREPROCESSOR_ACTOR_FILE
 push_artefact $API_ACTOR $API_ACTOR_FILE
 push_artefact $FAKE_ML $FAKE_ML_PROVIDER_FILE
 push_artefact $SQUEEZENET_MODEL_ACTOR $SQUEEZENET_MODEL_ACTOR_FILE

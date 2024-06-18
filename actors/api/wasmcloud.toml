@@ -1,9 +1,9 @@
 name = "api"
-language = "rust"
-type = "actor"
 version = "0.1.0"
+language = "rust"
+type = "component"
 
-[actor]
+[component]
 wit_world = "api"
 wasm_target = "wasm32-wasi-preview2"
 

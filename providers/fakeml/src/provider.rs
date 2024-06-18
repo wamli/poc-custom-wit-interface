@@ -1,14 +1,13 @@
+wit_bindgen_wrpc::generate!();
+
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use anyhow::Context as _;
-use tracing::{debug, info, error};
+use tracing::{debug, info, warn};
 use std::collections::HashMap;
 use crate::config::ProviderConfig;
 use crate::provider::exports::wamli::ml::inference::Handler;
 use wasmcloud_provider_sdk::{run_provider, Context, LinkConfig, Provider, ProviderInitConfig};
-
-
-wit_bindgen_wrpc::generate!();
 
 #[derive(Default, Clone)]
 pub struct AiModelProvider {
@@ -55,8 +54,12 @@ impl AiModelProvider {
 /// link to the provider. The `Handler` trait is generated for each export in the WIT world.
 impl Handler<Option<Context>> for AiModelProvider {
 
-   async fn predict(&self, _ctx: Option<Context>, _input: String) -> anyhow::Result<String> {
-      Ok(String::from("Greetings from ml provider!"))
+    async fn predict(&self, _ctx: Option<Context>, _input: String) -> anyhow::Result<String> {
+        let x = "anything";
+        let y = "something";
+        warn!("-----------------> fakeml PREDICTING ... the future");
+        info!(x, y, "-----------------> fakeml PREDICTING ... the future");
+        Ok(String::from("Greetings from ml provider!"))
    }
 
    ///// Request information about the system the provider is running on
@@ -132,6 +135,7 @@ impl Provider for AiModelProvider {
    async fn init(&self, config: impl ProviderInitConfig) -> anyhow::Result<()> {
        let provider_id = config.get_provider_id();
        let initial_config = config.get_config();
+
        info!(provider_id, ?initial_config, "initializing provider");
 
        // Save configuration to provider state
@@ -160,6 +164,11 @@ impl Provider for AiModelProvider {
            .await
            .insert(target_id.to_string(), config.to_owned());
 
+        info!(
+            "finished processing link from provider to component [{}] <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<",
+            target_id
+        );
+
        debug!(
            "finished processing link from provider to component [{}]",
            target_id
@@ -186,7 +195,7 @@ impl Provider for AiModelProvider {
            .await
            .insert(source_id.to_string(), config.to_owned());
 
-       debug!(
+       info!(
            "finished processing link from component [{}] to provider",
            source_id
        );
@@ -199,7 +208,7 @@ impl Provider for AiModelProvider {
    async fn delete_link_as_source(&self, target: &str) -> anyhow::Result<()> {
        self.linked_to.write().await.remove(target);
 
-       debug!(
+       info!(
            "finished processing delete link from provider to component [{}]",
            target
        );
@@ -212,7 +221,7 @@ impl Provider for AiModelProvider {
    async fn delete_link_as_target(&self, source_id: &str) -> anyhow::Result<()> {
        self.linked_from.write().await.remove(source_id);
 
-       debug!(
+       info!(
            "finished processing delete link from component [{}] to provider",
            source_id
        );
