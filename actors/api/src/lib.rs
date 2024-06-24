@@ -32,6 +32,16 @@ impl Guest for Api {
             target_value: None,
         };
 
+        // https://wasmcloud.slack.com/archives/CS38R7N9Y/p1719256911613509?thread_ts=1718986484.246259&cid=CS38R7N9Y
+        let interface = wasmcloud::bus::lattice::CallTargetInterface::new(
+            "wamli",
+            "ml",
+            "conversion",
+        );
+        
+        wasmcloud::bus::lattice::set_link_name("preprocessor01", vec![interface]);
+
+
         let converted = convert(&conversion_request);
         log(Level::Info, "Api", &format!("--------> CONVERSION received: {:?}", converted));
 

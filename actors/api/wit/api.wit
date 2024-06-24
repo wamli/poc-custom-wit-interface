@@ -1,6 +1,7 @@
 package wamli:mlinference;
 
 world api {
+  import wasmcloud:bus/lattice@1.0.0;
   import wasi:logging/logging;
   import wamli:ml/inference;
   import wamli:ml/conversion;

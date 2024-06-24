@@ -25,6 +25,7 @@ spec:
             interfaces: [inference]
         - type: link
           properties:
+            name: preprocessor01
             target: preprocessor
             namespace: wamli
             package: ml

@@ -11,3 +11,4 @@ crate-type = ["cdylib"]
 [dependencies]
 # tracing = "0.1.40"
 wit-bindgen = { version = "0.24", features = ["default"] }
+# wasmcloud-component = { features = ["rand", "uuid"] }
