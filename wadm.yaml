@@ -30,11 +30,29 @@ spec:
             namespace: wamli
             package: ml
             interfaces: [conversion]
+        - type: link
+          properties:
+            name: postprocessor01
+            target: postrocessor
+            namespace: wamli
+            package: ml
+            interfaces: [conversion]
+    
     - name: preprocessor
       type: component
       properties:
         image: file:///home/finnfalter/git/wamli/poc-custom-wit-interface/actors/preprocessor/build/preprocessor_s.wasm
         id: preprocessor
+      traits:
+        - type: spreadscaler
+          properties:
+            replicas: 1
+
+    - name: postprocessor
+      type: component
+      properties:
+        image: file:///home/finnfalter/git/wamli/poc-custom-wit-interface/actors/postprocessor/build/postprocessor_s.wasm
+        id: postprocessor
       traits:
         - type: spreadscaler
           properties:

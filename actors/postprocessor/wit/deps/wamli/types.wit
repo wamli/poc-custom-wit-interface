@@ -1,0 +1,72 @@
+// package wamli:ml;
+
+interface types {
+   // use wasi:io/streams@0.2.0.{input-stream, output-stream};
+   enum execution-target {
+      cpu,
+      gpu,
+      tpu,
+   }
+   
+   record tensor {
+      dimensions: dimensions,
+      value-types: value-types,
+      bit-flags: u8,
+      data: list<u8>,
+   }   
+
+   type dimensions = list<dimension>;
+
+   type dimension = u32;
+   
+   type value-types = list<value-type>;
+
+   /// Value of a data element in a tensor
+   enum value-type {
+      /// Unsigned 8-bit data (0x00) (b0000 0000)
+      U8,
+      /// Unsigned 16-bit data (0x01) (b0000 0001)
+      U16,
+      /// Unsigned 32-bit data (0x02) (b0000 0010)
+      U32,
+      /// Unsigned 64-bit data (0x03) (b0000 0011)
+      U64,
+      /// Unsigned 128-bit data (0x04) (b0000 0100)
+      U128,
+      /// Signed 8-bit data (0x40) (b0100 0000)
+      S8,
+      /// Signed 16-bit data (0x41) (b0100 0001)
+      S16,
+      /// Signed 32-bit data (0x42) (b0100 0010)
+      S32,
+      /// Signed 64-bit data (0x43) (b0100 0011)
+      S64,
+      /// Signed 128-bit data (0x44) (b0100 0100)
+      S128,
+      /// 16-bit IEEE Float (0x81) (b1000 0001)
+      F16,
+      /// 32-bit IEEE Float (0x82) (b1000 0010)
+      F32,
+      /// 64-bit IEEE Float (0x83) (b1000 0011)
+      F64,
+      /// 128-bit IEEE Float (0x84) (b1000 0100)
+      F128,
+   }
+
+   variant status {
+      success(bool),
+      error(ml-error),
+   }
+
+   variant ml-error {
+      invalid-model(string),
+      invalid-encoding(string),
+      corrupt-input-tensor(string),
+      runtime-error(string),
+      openvino-error(string),
+      onnx-error(string),
+      tensorflow-error(string),
+      tflite-error(string),
+      context-not-found-error(string),
+   }
+}

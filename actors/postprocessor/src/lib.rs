@@ -7,11 +7,11 @@ use exports::wamli::ml::conversion::ConversionRequest;
 
 wit_bindgen::generate!();
 
-struct PreProcessor;
+struct PostProcessor;
 
-impl Guest for PreProcessor {
+impl Guest for PostProcessor {
     fn convert(_input: ConversionRequest) -> ConversionResponse {
-        log(Level::Info, "PreProcessor_01", "------ PRE-PROCESSOR RECEIVED CONVERSION REQUEST ------");
+        log(Level::Info, "PostProcessor_01", "------ POST-PROCESSOR RECEIVED CONVERSION REQUEST ------");
         
         let tensor = Tensor {
             dimensions: vec![1, 2, 3],
@@ -24,4 +24,4 @@ impl Guest for PreProcessor {
     }
 }
 
-export!(PreProcessor);
+export!(PostProcessor);

@@ -33,15 +33,23 @@ impl Guest for Api {
         };
 
         // https://wasmcloud.slack.com/archives/CS38R7N9Y/p1719256911613509?thread_ts=1718986484.246259&cid=CS38R7N9Y
-        let interface = wasmcloud::bus::lattice::CallTargetInterface::new(
+        let interface1 = wasmcloud::bus::lattice::CallTargetInterface::new(
+            "wamli",
+            "ml",
+            "conversion",
+        );
+
+        let interface2 = wasmcloud::bus::lattice::CallTargetInterface::new(
             "wamli",
             "ml",
             "conversion",
         );
         
-        wasmcloud::bus::lattice::set_link_name("preprocessor01", vec![interface]);
+        wasmcloud::bus::lattice::set_link_name("preprocessor01", vec![interface1]);
+        let converted = convert(&conversion_request);
+        log(Level::Info, "Api", &format!("--------> CONVERSION received: {:?}", converted));
 
-
+        wasmcloud::bus::lattice::set_link_name("postrocessor01", vec![interface2]);
         let converted = convert(&conversion_request);
         log(Level::Info, "Api", &format!("--------> CONVERSION received: {:?}", converted));
 

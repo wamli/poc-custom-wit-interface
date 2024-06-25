@@ -1,8 +1,8 @@
-name = "http-hello-world"
+name = "postprocessor"
 version = "0.1.0"
 language = "rust"
 type = "component"
 
 [component]
-wit_world = "preprocessing"
+wit_world = "postprocessing"
 wasm_target = "wasm32-wasi-preview2"
