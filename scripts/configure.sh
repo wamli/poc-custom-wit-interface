@@ -43,6 +43,9 @@ API_ACTOR_FILE=$EXEC_PATH/../actors/api/build/api_s.wasm
 PREPROCESSOR_ACTOR=preprocessor:0.1.0
 PREPROCESSOR_ACTOR_FILE=$EXEC_PATH/../actors/preprocessor/build/preprocessor_s.wasm
 
+POSTPROCESSOR_ACTOR=postprocessor:0.1.0
+POSTPROCESSOR_ACTOR_FILE=$EXEC_PATH/../actors/postprocessor/build/postprocessor_s.wasm
+
 SQUEEZENET_MODEL_ACTOR=squeezenet_model:0.1.0
 SQUEEZENET_MODEL_ACTOR_FILE=$EXEC_PATH/../actors/model/build/model_s.wasm
 
@@ -158,6 +161,7 @@ start_local_registry
 
 push_artefact $HTTPSERVER $HTTP_PROVIDER_FILE
 push_artefact $PREPROCESSOR_ACTOR $PREPROCESSOR_ACTOR_FILE
+push_artefact $POSTPROCESSOR_ACTOR $POSTPROCESSOR_ACTOR_FILE
 push_artefact $API_ACTOR $API_ACTOR_FILE
 push_artefact $FAKE_ML $FAKE_ML_PROVIDER_FILE
 push_artefact $SQUEEZENET_MODEL_ACTOR $SQUEEZENET_MODEL_ACTOR_FILE

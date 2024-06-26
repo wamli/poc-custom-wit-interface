@@ -33,7 +33,7 @@ spec:
         - type: link
           properties:
             name: postprocessor01
-            target: postrocessor
+            target: postprocessor
             namespace: wamli
             package: ml
             interfaces: [conversion]
