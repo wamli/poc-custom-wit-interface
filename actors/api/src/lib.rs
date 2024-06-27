@@ -1,8 +1,12 @@
 wit_bindgen::generate!();
 
+use http::{
+    header::{ALLOW, CONTENT_LENGTH}
+};
+
 use urlencoding::decode; 
 use serde_json::from_str; 
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use http::StatusCode;
 // use serde::{de::value, Deserialize, Serialize};
 use wasi::http::types::*;
@@ -10,9 +14,9 @@ use crate::wasi::logging::logging::*;
 use crate::wamli::ml::inference::predict;
 use crate::wasi::io::streams::StreamError;
 use crate::wamli::ml::conversion::convert;
-use wamli::ml::{conversion::ConversionRequest};
+use wamli::ml::{conversion::ConversionRequest, inference::prefetch};
 use exports::wasi::http::incoming_handler::Guest;
-use crate::wamli::ml::conversion::{Tensor, ValueType};
+use crate::wamli::ml::conversion::{Tensor, DataType};
 
 
 type Result<T> = std::result::Result<T, Error>;
@@ -127,6 +131,13 @@ impl Guest for Api {
         match (method, segments.as_slice()) {
             (Method::Get, ["prefetch", model_id]) => {
                 log(Level::Info, "Api", &format!("--------> API: executing PREFETCH with model_id: '{:?}' ", model_id));
+
+                let prefetch_result = prefetch(model_id);
+
+                log(Level::Info, "Api", &format!("--------> API: PREFETCH result: '{:?}' ", prefetch_result));
+                
+                send_positive_resonse(response_out, &format!("Feedback from inference provider: {:?}", prefetch_result));
+                return;
             },
 
             (Method::Put, [model_id]) => {
@@ -162,7 +173,7 @@ impl Guest for Api {
                     }
                 };
 
-                let val_type:ValueType = match String::from(value_type).parse::<ValueType>(){
+                let val_type:DataType = match String::from(value_type).parse::<DataType>(){
                     Ok(v) => v,
                     Err(error) => {
                         log(Level::Error, "Api", &format!("Invalid value-type detected in request: {:?}", error));
@@ -176,9 +187,8 @@ impl Guest for Api {
                 };
 
                 let tensor = Tensor {
-                    dimensions: dimensions_vector,
-                    value_types: vec![val_type],
-                    bit_flags: 0,
+                    shape: dimensions_vector,
+                    dtype: val_type,
                     data: body,
                 };
 
@@ -288,37 +298,37 @@ fn send_response_error(response_out: ResponseOutparam, error: Error) {
 }
 
 fn parse_request_body(request: IncomingRequest) -> Result<Vec<u8>> {
-    let body = match request.consume() {
-        Ok(b) => Ok(b),
-        Err(_) => Err(Error::body_parsing_error()),
-    }?;
+    // let body = match request.consume() {
+    //     Ok(b) => Ok(b),
+    //     Err(_) => Err(Error::body_parsing_error()),
+    // }?;
 
-    let stream = body
-        .stream()
-        .expect("Unable to get stream from request body");
+    // let stream = body
+    //     .stream()
+    //     .expect("Unable to get stream from request body");
 
     let mut buffer: Vec<u8> = Vec::new();
 
-    loop {
-        // let mut chunk: Vec<u8> = Vec::new();
-        if let Some(chunk) = stream.read(1024).ok() {
-            log(
-                Level::Info,
-                "Api",
-                format!("Read some bytes to buffer: {}", chunk.len()).as_str(),
-            );
+    // // loop {
+    // //     // let mut chunk: Vec<u8> = Vec::new();
+    // //     if let Some(chunk) = stream.read(1024).ok() {
+    // //         log(
+    // //             Level::Info,
+    // //             "Api",
+    // //             format!("Read some bytes to buffer: {}", chunk.len()).as_str(),
+    // //         );
 
-            if chunk.len() == 0 {
-                // End of file reached
-                break;
-            }
-            buffer.extend_from_slice(&chunk[..chunk.len()]);
-        }
-    }
+    // //         if chunk.len() == 0 {
+    // //             // End of file reached
+    // //             break;
+    // //         }
+    // //         buffer.extend_from_slice(&chunk[..chunk.len()]);
+    // //     }
+    // // }
         
-    if buffer.len() == 0 {
-        return Err(Error::body_parsing_error());
-    }
+    // if buffer.len() == 0 {
+    //     return Err(Error::body_parsing_error());
+    // }
 
     log(Level::Info, "Api", &format!("--------> Read body into buffer - total length: {:?}", buffer.len()));
 
@@ -365,28 +375,28 @@ impl std::io::Write for OutputStreamWriter<'_> {
     }
 }
 
-// Implement the FromStr trait for the ValueType enum
-impl std::str::FromStr for ValueType {
+// Implement the FromStr trait for the DataType enum
+impl std::str::FromStr for DataType {
     type Err = Error;
 
-    fn from_str(s: &str) -> Result<ValueType> {
+    fn from_str(s: &str) -> Result<DataType> {
         let binding = s.to_lowercase();
         let s_lower = binding.as_ref();
         match s_lower {
-            "u8"  => Ok(ValueType::U8),
-            "u16" => Ok(ValueType::U16),
-            "u32" => Ok(ValueType::U32),
-            "u64" => Ok(ValueType::U64),
-            "u128"=> Ok(ValueType::U128),
-            "s8"  => Ok(ValueType::S8),
-            "s16" => Ok(ValueType::S16),
-            "s32" => Ok(ValueType::S32),
-            "s64" => Ok(ValueType::S64),
-            "s128"=> Ok(ValueType::S128),
-            "f16" => Ok(ValueType::F16),
-            "f32" => Ok(ValueType::F32),
-            "f64" => Ok(ValueType::F64),
-            "f128"=> Ok(ValueType::F128),
+            "u8"  => Ok(DataType::U8),
+            "u16" => Ok(DataType::U16),
+            "u32" => Ok(DataType::U32),
+            "u64" => Ok(DataType::U64),
+            "u128"=> Ok(DataType::U128),
+            "s8"  => Ok(DataType::S8),
+            "s16" => Ok(DataType::S16),
+            "s32" => Ok(DataType::S32),
+            "s64" => Ok(DataType::S64),
+            "s128"=> Ok(DataType::S128),
+            "f16" => Ok(DataType::F16),
+            "f32" => Ok(DataType::F32),
+            "f64" => Ok(DataType::F64),
+            "f128"=> Ok(DataType::F128),
             _ => Err(Error {
                     status_code: StatusCode::BAD_GATEWAY,
                     message: format!("Error when communicating with blobstore"),

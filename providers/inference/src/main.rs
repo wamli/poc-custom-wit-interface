@@ -1,9 +1,10 @@
-use anyhow::Context;
+// use anyhow::Context;
 // use tracing::{debug, info, error};
-use wasmcloud_provider_sdk::{run_provider, load_host_data, get_connection};
+// use wasmcloud_provider_sdk::{run_provider, load_host_data, get_connection};
 
 mod config;
 mod provider;
+mod data_loader;
 
 use provider::AiModelProvider;
 

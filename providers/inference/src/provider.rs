@@ -1,18 +1,28 @@
-wit_bindgen_wrpc::generate!();
+// wit_bindgen_wrpc::generate!();
 
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use anyhow::Context as _;
 use tracing::{debug, info, warn};
 use std::collections::HashMap;
-use crate::config::ProviderConfig;
-use crate::provider::exports::wamli::ml::inference::Handler;
+use crate::config::{ProviderConfig, DEFAULT_CONNECT_URL, CONFIG_URL_KEY};
+
 use wasmcloud_provider_sdk::{run_provider, Context, LinkConfig, Provider, ProviderInitConfig};
+
+use inference::{Handler, serve, Status};
 
 #[derive(Default, Clone)]
 pub struct AiModelProvider {
-    // store redis connections per actor
-    actors: Arc<RwLock<HashMap<String, String>>>,
+    /// map to store the assignments between the respective model
+    /// and corresponding bindle path for each linked actor
+    /// TODO:
+    ///   - instead of delaying putLink for model loading and initialization,
+    ///     add a Ready flag (AtomicBool) that is set after model is loaded and initialized.
+    ///   - initialize actor link as soon as we receive the putlink command
+    ///   - if health check or rpc is received when not ready, return not-ready error
+    // components: Arc<RwLock<HashMap<String, ModelZoo>>>,
+
+
     config: Arc<RwLock<ProviderConfig>>,
     /// All components linked to this provider and their config.
     linked_from: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
@@ -57,10 +67,27 @@ impl Handler<Option<Context>> for AiModelProvider {
     async fn predict(&self, _ctx: Option<Context>, _input: String) -> anyhow::Result<String> {
         let x = "anything";
         let y = "something";
-        warn!("-----------------> fakeml PREDICTING ... the future");
-        info!(x, y, "-----------------> fakeml PREDICTING ... the future");
+        warn!("-----------------> inference provider PREDICTING ... the future");
+        info!(x, y, "-----------------> inference provider PREDICTING ... the future");
         Ok(String::from("Greetings from ml provider!"))
    }
+
+   async fn prefetch(&self, _ctx: Option<Context>, input: String) -> anyhow::Result<Status> {
+    info!("Inference provider prefetching model '{}'", input);
+    
+    let config_guard = self.config.read().await;
+
+    let registry = match config_guard.values.get(CONFIG_URL_KEY) {
+        Some(url) => url,
+        None => DEFAULT_CONNECT_URL,
+    };
+
+    info!("Inference provider executing PREFETCH with registry '{}' and model '{}", registry, input);
+
+    let status = Status::Success(true);
+
+    Ok(status)
+}
 
    ///// Request information about the system the provider is running on
    // async fn request_info(&self, ctx: Option<Context>, kind: Kind) -> anyhow::Result<String> {

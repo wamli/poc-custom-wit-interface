@@ -6,6 +6,7 @@ echo This script executes from $EXEC_PATH
 
 # start the host first - but in a different shell
 # wash up --nats-websocket-port 4223 --allowed-insecure localhost:5000
+# wash up --allowed-insecure localhost:5000
 
 wash app list
 

@@ -19,7 +19,7 @@ spec:
             replicas: 1
         - type: link
           properties:
-            target: fakeml
+            target: inference
             namespace: wamli
             package: ml
             interfaces: [inference]
@@ -74,11 +74,11 @@ spec:
                 properties: 
                   ADDRESS: 127.0.0.1:8081
 
-    - name: fakeml
+    - name: inference
       type: capability
       properties:
-        image: localhost:5000/v2/fakeml:0.1.0
-        id: fakeml
+        image: localhost:5000/v2/inference:0.1.0
+        id: inference
         config:
           - name: registry-url
             properties:

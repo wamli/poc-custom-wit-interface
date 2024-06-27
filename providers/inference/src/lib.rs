@@ -1,3 +1,7 @@
+wit_bindgen_wrpc::generate!();
+
+pub use crate::exports::wamli::ml::inference::{Handler, Status};
+
 // //! Redis implementation for wasmcloud:keyvalue.
 // //!
 // //! This implementation is multi-threaded and operations between different actors

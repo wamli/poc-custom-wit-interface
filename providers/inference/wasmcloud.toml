@@ -1,4 +1,4 @@
-name = "Fake ML"
+name = "Inference"
 language = "rust"
 type = "provider"
 
