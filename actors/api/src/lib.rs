@@ -82,9 +82,10 @@ impl Guest for Api {
 
         // Derive the appropriate model, dimensions and value-type from the path & query string
         //
-        // ex. 'localhost:8080/mobilenetv27:latest?dimensions=[2,2]&value_type=F32'
-        // ex. 'localhost:8080/mobilenetv27%3Alatest?dimensions=%5B2%2C2%5D&value_type=F32'
-        // ex. 'localhost:8080/no-preprocessing/mobilenetv27%3Alatest?dimensions=%5B2%2C2%5D&value_type=F32'
+        // ex. 'localhost:8081/mobilenetv27:latest?dimensions=[2,2]&value_type=F32'
+        // ex. 'localhost:8081/mobilenetv27%3Alatest?dimensions=%5B2%2C2%5D&value_type=F32'
+        // ex. 'localhost:8081/no-preprocessing/mobilenetv27%3Alatest?dimensions=%5B2%2C2%5D&value_type=F32'
+        // ex. 'localhost:8081/prefetch/wamli-mobilenet27%3Alatest?dimensions=%5B2%2C2%5D&value_type=F32'
         let (full_path, dimensions, value_type) = match path_and_query.split_once('?') 
         {
             Some((path, query)) => {

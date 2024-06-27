@@ -7,6 +7,10 @@ pub type ModelName = String;
 pub type ModelId = String;
 pub type ModelZoo = HashMap<ModelName, ModelContext>;
 
+/// This is not set explicitly in the build script.
+/// It seems to be derviced by the server.
+pub const MEDIA_TYPE: &str = "application/vnd.oci.image.layer.v1.tar+gzip";
+
 /// Default URL to use to connect to registry
 pub const DEFAULT_CONNECT_URL: &str = "localhost:5000";
 

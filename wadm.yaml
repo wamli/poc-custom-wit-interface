@@ -11,7 +11,7 @@ spec:
     - name: api
       type: component
       properties:
-        image: file:///home/finnfalter/git/wamli/poc-custom-wit-interface/actors/api/build/api_s.wasm
+        image: file://actors/api/build/api_s.wasm
         id: api
       traits:
         - type: spreadscaler
@@ -41,7 +41,7 @@ spec:
     - name: preprocessor
       type: component
       properties:
-        image: file:///home/finnfalter/git/wamli/poc-custom-wit-interface/actors/preprocessor/build/preprocessor_s.wasm
+        image: file://actors/preprocessor/build/preprocessor_s.wasm
         id: preprocessor
       traits:
         - type: spreadscaler
@@ -51,7 +51,7 @@ spec:
     - name: postprocessor
       type: component
       properties:
-        image: file:///home/finnfalter/git/wamli/poc-custom-wit-interface/actors/postprocessor/build/postprocessor_s.wasm
+        image: file://actors/postprocessor/build/postprocessor_s.wasm
         id: postprocessor
       traits:
         - type: spreadscaler
@@ -77,9 +77,11 @@ spec:
     - name: inference
       type: capability
       properties:
-        image: localhost:5000/v2/inference:0.1.0
+        image: file://providers/inference/build/inference.par.gz
+        # image: localhost:5000/v2/inference:0.1.0
         id: inference
         config:
           - name: registry-url
             properties:
-              url: localhost:5000
+              # URL of OCI image registry where to fech model and metadata from
+              url: localhost:5000 

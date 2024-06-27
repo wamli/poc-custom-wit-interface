@@ -5,7 +5,7 @@ use tokio::sync::RwLock;
 use anyhow::Context as _;
 use tracing::{debug, info, warn};
 use std::collections::HashMap;
-use crate::config::{ProviderConfig, DEFAULT_CONNECT_URL, CONFIG_URL_KEY};
+use crate::{config::{ProviderConfig, CONFIG_URL_KEY, DEFAULT_CONNECT_URL, MEDIA_TYPE}, data_loader::pull_model_and_metadata};
 
 use wasmcloud_provider_sdk::{run_provider, Context, LinkConfig, Provider, ProviderInitConfig};
 
@@ -82,7 +82,15 @@ impl Handler<Option<Context>> for AiModelProvider {
         None => DEFAULT_CONNECT_URL,
     };
 
-    info!("Inference provider executing PREFETCH with registry '{}' and model '{}", registry, input);
+    let oci_image = registry.to_owned() + "/" + &input;
+
+    info!("Inference provider executing PREFETCH with registry '{}', model '{}' and image '{}'", registry, input, &oci_image);
+
+    let model_data = pull_model_and_metadata(&oci_image, MEDIA_TYPE).await.unwrap();
+
+    let model_size = model_data.model.len();
+
+    info!("PREFETCHED - metadata '{:?}' and model of size '{}'", model_data.metadata, model_size);
 
     let status = Status::Success(true);
 

@@ -28,14 +28,8 @@ INFERENCE=inference:0.1.0
 INFERENCE_PROVIDER_FILE=$EXEC_PATH/../providers/inference/build/inference.par.gz
 
 ##
-#   ACTORS
+#   COMPONENTS
 ##
-
-ECHO_ACTOR=echo:0.3.4
-ECHO_ACTOR_FILE=$EXEC_PATH/../images/echo.wasm
-
-HELLOWORLD_ACTOR=http-hello-world:0.1.0
-HELLOWORLD_ACTOR_FILE=/home/finnfalter/git/wasmcloud/wasmCloud/examples/rust/actors/http-hello-world/build/http_hello_world_s.wasm
 
 API_ACTOR=api:0.1.0
 API_ACTOR_FILE=$EXEC_PATH/../actors/api/build/api_s.wasm
@@ -49,6 +43,10 @@ POSTPROCESSOR_ACTOR_FILE=$EXEC_PATH/../actors/postprocessor/build/postprocessor_
 SQUEEZENET_MODEL_ACTOR=squeezenet_model:0.1.0
 SQUEEZENET_MODEL_ACTOR_FILE=$EXEC_PATH/../actors/model/build/model_s.wasm
 
+##
+#   AI MODELS
+##
+MOBILENETV27_MODEL_FILE=mobilenetv27.tar
 
 ##
 #   LOCAL REGISTRY 
@@ -108,12 +106,14 @@ push_artefact() {
    local local_registry="$LOCAL_REG_SERVER"
    local remote_registry="$REMOTE_REG_SERVER"
 
+   echo
    echo -e "processing 'push_artefact()' with the following parameters:"
    echo -e "\timage_name: $image_name"
    echo -e "\tlocal_file: $local_file"
    echo -e "\tlocal_registry: $local_registry"
    echo -e "\tremote_registry: $remote_registry"
 
+   # set -x
    while true; do
       # IF image already is in local registry, done
       is_image_in_registry ${image_name}
@@ -135,7 +135,7 @@ push_artefact() {
          echo "File '$local_file' does not exist."
       fi
 
-      pushd images
+      pushd ../images
       echo -e "pulling ${image_name} from remote .."
       wash pull $REMOTE_REG_SERVER/$image_name
       pushd
@@ -145,9 +145,8 @@ push_artefact() {
 
 show_images() {
    local local_registry="$1"
-   echo -n "\nThe following images are in $1/v2: "
-   # curl -sX GET "http://localhost:5000/v2/_catalog"
-   curl -sX GET "http://${local_registry}/v2/_catalog"
+   echo -e "\nThe following images are in registry '$1/v2': "
+   curl -sX GET "http://${local_registry}/v2/_catalog" | jq
 }
 
 ##
@@ -156,16 +155,20 @@ show_images() {
 
 wash drain all
 
-stop_local_registry
-start_local_registry
+# stop_local_registry
+# start_local_registry
 
 push_artefact $HTTPSERVER $HTTP_PROVIDER_FILE
 push_artefact $PREPROCESSOR_ACTOR $PREPROCESSOR_ACTOR_FILE
 push_artefact $POSTPROCESSOR_ACTOR $POSTPROCESSOR_ACTOR_FILE
 push_artefact $API_ACTOR $API_ACTOR_FILE
 push_artefact $INFERENCE $INFERENCE_PROVIDER_FILE
-push_artefact $SQUEEZENET_MODEL_ACTOR $SQUEEZENET_MODEL_ACTOR_FILE
-push_artefact $HELLOWORLD_ACTOR $HELLOWORLD_ACTOR_FILE
+# push_artefact $SQUEEZENET_MODEL_ACTOR $SQUEEZENET_MODEL_ACTOR_FILE
+
+# docker load -i ../images/$MOBILENETV27_MODEL_FILE
+
+
+# set +x
 
 show_images $LOCAL_REG_SERVER
 
