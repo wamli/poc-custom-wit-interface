@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ModelMetadata {
-   /// Model name (optional)
+   /// Model name
    #[serde(default)]
-   pub model_name: Option<String>,
+   pub model_name: String,
 
    /// graph encoding
    #[serde(default)]

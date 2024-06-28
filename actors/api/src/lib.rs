@@ -26,7 +26,7 @@ const DIMENSIONS_PARAM_NAME: &str = "dimensions";
 const VALUE_TYPE_PARAM_NAME: &str = "value_type";
 // [1, 3, 244, 244] which is a typical ImageNet dimension
 const DEFAULT_DIMENIONS: &str = "%5B1%2C3%2C224%2C224%5D"; 
-const DEFAULT_VALUE_TYPE: &str = "F32";
+const DEFAULT_VALUE_TYPE: &str = "NA";
 
 struct Api;
 
@@ -85,7 +85,8 @@ impl Guest for Api {
         // ex. 'localhost:8081/mobilenetv27:latest?dimensions=[2,2]&value_type=F32'
         // ex. 'localhost:8081/mobilenetv27%3Alatest?dimensions=%5B2%2C2%5D&value_type=F32'
         // ex. 'localhost:8081/no-preprocessing/mobilenetv27%3Alatest?dimensions=%5B2%2C2%5D&value_type=F32'
-        // ex. 'localhost:8081/prefetch/wamli-mobilenet27%3Alatest?dimensions=%5B2%2C2%5D&value_type=F32'
+        // ex. 'localhost:8081/prefetch/wamli-mobilenetv27%3Alatest?dimensions=%5B2%2C2%5D&value_type=F32'
+        // ex. 'localhost:8081/prefetch/wamli-mobilenetv27%3Alatest'
         let (full_path, dimensions, value_type) = match path_and_query.split_once('?') 
         {
             Some((path, query)) => {
@@ -94,8 +95,8 @@ impl Guest for Api {
                     .split('&')
                     .filter_map(|p| p.split_once('='))
                     .find(|(k, _)| *k == DIMENSIONS_PARAM_NAME)
-                    .map(|(_, v)| v)
-                    .unwrap_or(DEFAULT_DIMENIONS);
+                    .map(|(_, v)| v);
+                    // .unwrap_or(DEFAULT_DIMENIONS);
 
                 let value_type = query
                     .split('&')
@@ -105,20 +106,24 @@ impl Guest for Api {
                     .map(|(_, v)| v)
                     .unwrap_or(DEFAULT_VALUE_TYPE);
                 
-                (path.trim_matches('/').to_string(), dimensions.to_string(), value_type.to_string())
+                // (path.trim_matches('/').to_string(), dimensions.unwrap_or("").to_string(), value_type.unwrap_or("").to_string())
+                (path.trim_matches('/').to_string(), dimensions, value_type.to_string())
             }
             None => (
                 path_and_query.trim_matches('/').to_string(),
-                DEFAULT_DIMENIONS.to_string(),
+                Some(DEFAULT_DIMENIONS),
                 DEFAULT_VALUE_TYPE.to_string(),
             ),
         };
 
-        let decoded_dimensions = decode(&dimensions).unwrap_or(std::borrow::Cow::Borrowed(""));
-        let dimensions_vector: Vec<u32> = from_str(&decoded_dimensions).unwrap_or(vec![]);
+        // dimensions.and_then(f);
+
+        let dimensions_vector: Option<Vec<u32>> = dimensions.and_then(|d| {
+            let decoded_dimensions = decode(&d).unwrap_or(std::borrow::Cow::Borrowed(""));
+            from_str(&decoded_dimensions).ok()
+        });
 
         let decoded_model = decode(&full_path).unwrap();
-
         let segments: Vec<&str> = decoded_model.trim_end_matches('/').split('/').collect();
 
         log(
@@ -162,10 +167,14 @@ impl Guest for Api {
             (Method::Put, ["inference-only", model_id]) => {
                 log(Level::Info, "Api", &format!("--------> API: executing INFERENCE-ONLY with model_id: '{:?}' ", model_id));
 
+                // let body = get_body(req, response_out);
                 let body = match parse_request_body(req) {
-                    Ok(b) => b,
+                    Ok(b) => {
+                        log(Level::Info, "Api", &format!("--------> Read http request body into buffer - total length: {:?}", b.len()));
+                        b
+                    },
+
                     Err(error) => {
-                        log(Level::Error, "Api", &format!("failed to deserialize the input tensor from body: {:?}", error));
                         send_response_error(
                             response_out,
                             error,
@@ -177,8 +186,6 @@ impl Guest for Api {
                 let val_type:DataType = match String::from(value_type).parse::<DataType>(){
                     Ok(v) => v,
                     Err(error) => {
-                        log(Level::Error, "Api", &format!("Invalid value-type detected in request: {:?}", error));
-                    
                         send_response_error(
                             response_out,
                             Error::bad_request_parameter_value_type(error),
@@ -188,7 +195,7 @@ impl Guest for Api {
                 };
 
                 let tensor = Tensor {
-                    shape: dimensions_vector,
+                    shape: dimensions_vector.unwrap_or(vec![]),
                     dtype: val_type,
                     data: body,
                 };
@@ -218,18 +225,18 @@ impl Guest for Api {
         //     target_value: None,
         // };
 
-        // https://wasmcloud.slack.com/archives/CS38R7N9Y/p1719256911613509?thread_ts=1718986484.246259&cid=CS38R7N9Y
-        let interface1 = wasmcloud::bus::lattice::CallTargetInterface::new(
-            "wamli",
-            "ml",
-            "conversion",
-        );
+        // // https://wasmcloud.slack.com/archives/CS38R7N9Y/p1719256911613509?thread_ts=1718986484.246259&cid=CS38R7N9Y
+        // let interface1 = wasmcloud::bus::lattice::CallTargetInterface::new(
+        //     "wamli",
+        //     "ml",
+        //     "conversion",
+        // );
 
-        let interface2 = wasmcloud::bus::lattice::CallTargetInterface::new(
-            "wamli",
-            "ml",
-            "conversion",
-        );
+        // let interface2 = wasmcloud::bus::lattice::CallTargetInterface::new(
+        //     "wamli",
+        //     "ml",
+        //     "conversion",
+        // );
         
         // wasmcloud::bus::lattice::set_link_name("preprocessor01", vec![interface1]);
         // let converted = convert(&conversion_request);
@@ -274,11 +281,13 @@ fn send_positive_resonse(response_out: ResponseOutparam, content: &str) {
 }
 
 fn send_response_error(response_out: ResponseOutparam, error: Error) {
+    log(Level::Error, "Api", &format!("Failed to process request: {:?}", error));
+    
     let response = OutgoingResponse::new(Fields::new());
     response
         .set_status_code(error.status_code.as_u16())
         .expect("Unable to set status code");
-    let response_body = response.body().expect("body called more than once");
+    let response_body: OutgoingBody = response.body().expect("body called more than once");
     let mut writer = response_body.write().expect("should only call write once");
 
     let mut stream = OutputStreamWriter::from(&mut writer);
@@ -298,42 +307,124 @@ fn send_response_error(response_out: ResponseOutparam, error: Error) {
     ResponseOutparam::set(response_out, Ok(response));
 }
 
+fn get_body(request: IncomingRequest, response_out: ResponseOutparam) -> Vec<u8> {
+    match parse_request_body(request) {
+        Ok(b) => {
+            log(Level::Info, "Api", &format!("--------> Read http request body into buffer - total length: {:?}", b.len()));
+            b
+        },
+
+        Err(error) => {
+            log(Level::Error, "Api", &format!("Failed to deserialize the input tensor from body: {:?}", error));
+            send_response_error(
+                response_out,
+                error,
+            );
+            return vec![];
+        }
+    }
+}
+
 fn parse_request_body(request: IncomingRequest) -> Result<Vec<u8>> {
-    // let body = match request.consume() {
-    //     Ok(b) => Ok(b),
-    //     Err(_) => Err(Error::body_parsing_error()),
-    // }?;
+    let body = match request.consume() {
+        Ok(b) => Ok(b),
+        Err(_) => Err(Error::body_parsing_error()),
+    }?;
 
-    // let stream = body
-    //     .stream()
-    //     .expect("Unable to get stream from request body");
+    let mut stream = body
+        .stream()
+        .expect("Unable to get stream from request body");
 
-    let mut buffer: Vec<u8> = Vec::new();
+    let mut reader: InputStreamReader = (&mut stream).into();
 
-    // // loop {
-    // //     // let mut chunk: Vec<u8> = Vec::new();
-    // //     if let Some(chunk) = stream.read(1024).ok() {
-    // //         log(
-    // //             Level::Info,
-    // //             "Api",
-    // //             format!("Read some bytes to buffer: {}", chunk.len()).as_str(),
-    // //         );
+    let mut buffer = Vec::<u8>::new();
 
-    // //         if chunk.len() == 0 {
-    // //             // End of file reached
-    // //             break;
-    // //         }
-    // //         buffer.extend_from_slice(&chunk[..chunk.len()]);
-    // //     }
-    // // }
+    loop {
+        let mut chunk = [0u8; 4096]; // Buffer to store the read data
+        if let Some(no_bytes_read) = reader.read(&mut chunk).ok() {
+            if no_bytes_read == 0 {
+                // End of file reached
+                break;
+            }
+            buffer.extend_from_slice(&chunk);
+        }
+    }
         
-    // if buffer.len() == 0 {
-    //     return Err(Error::body_parsing_error());
-    // }
-
-    log(Level::Info, "Api", &format!("--------> Read body into buffer - total length: {:?}", buffer.len()));
+    if buffer.len() == 0 {
+        return Err(Error::body_parsing_error());
+    }
 
     return Ok(buffer);
+}
+
+// Implement the FromStr trait for the DataType enum
+impl std::str::FromStr for DataType {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<DataType> {
+        let binding = s.to_lowercase();
+        let s_lower = binding.as_ref();
+        match s_lower {
+            "u8"  => Ok(DataType::U8),
+            "u16" => Ok(DataType::U16),
+            "u32" => Ok(DataType::U32),
+            "u64" => Ok(DataType::U64),
+            "u128"=> Ok(DataType::U128),
+            "s8"  => Ok(DataType::S8),
+            "s16" => Ok(DataType::S16),
+            "s32" => Ok(DataType::S32),
+            "s64" => Ok(DataType::S64),
+            "s128"=> Ok(DataType::S128),
+            "f16" => Ok(DataType::F16),
+            "f32" => Ok(DataType::F32),
+            "f64" => Ok(DataType::F64),
+            "f128"=> Ok(DataType::F128),
+            "na"  => Ok(DataType::Na),
+            _ => Err(Error {
+                    status_code: StatusCode::BAD_REQUEST,
+                    message: format!("Provided tensor's dtype is invalid"),
+                }),
+        }
+    }
+}
+
+pub struct InputStreamReader<'a> {
+    stream: &'a mut crate::wasi::io::streams::InputStream,
+}
+
+impl<'a> From<&'a mut crate::wasi::io::streams::InputStream> for InputStreamReader<'a> {
+    fn from(stream: &'a mut crate::wasi::io::streams::InputStream) -> Self {
+        Self { stream }
+    }
+}
+
+impl std::io::Read for InputStreamReader<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        use crate::wasi::io::streams::StreamError;
+        use std::io;
+
+        let n = buf
+            .len()
+            .try_into()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        match self.stream.blocking_read(n) {
+            Ok(chunk) => {
+                let n = chunk.len();
+                if n > buf.len() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "more bytes read than requested",
+                    ));
+                }
+                buf[..n].copy_from_slice(&chunk);
+                Ok(n)
+            }
+            Err(StreamError::Closed) => Ok(0),
+            Err(StreamError::LastOperationFailed(e)) => {
+                Err(io::Error::new(io::ErrorKind::Other, e.to_debug_string()))
+            }
+        }
+    }
 }
 
 pub struct OutputStreamWriter<'a> {
@@ -348,6 +439,9 @@ impl<'a> From<&'a mut crate::wasi::io::streams::OutputStream> for OutputStreamWr
 
 impl std::io::Write for OutputStreamWriter<'_> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        use crate::wasi::io::streams::StreamError;
+        use std::io;
+
         let n = match self.stream.check_write().map(std::num::NonZeroU64::new) {
             Ok(Some(n)) => n,
             Ok(None) | Err(StreamError::Closed) => return Ok(0),
@@ -376,32 +470,116 @@ impl std::io::Write for OutputStreamWriter<'_> {
     }
 }
 
-// Implement the FromStr trait for the DataType enum
-impl std::str::FromStr for DataType {
-    type Err = Error;
+pub struct StdioStream<'a> {
+    stdin: std::io::StdinLock<'a>,
+    stdout: std::io::StdoutLock<'a>,
+}
 
-    fn from_str(s: &str) -> Result<DataType> {
-        let binding = s.to_lowercase();
-        let s_lower = binding.as_ref();
-        match s_lower {
-            "u8"  => Ok(DataType::U8),
-            "u16" => Ok(DataType::U16),
-            "u32" => Ok(DataType::U32),
-            "u64" => Ok(DataType::U64),
-            "u128"=> Ok(DataType::U128),
-            "s8"  => Ok(DataType::S8),
-            "s16" => Ok(DataType::S16),
-            "s32" => Ok(DataType::S32),
-            "s64" => Ok(DataType::S64),
-            "s128"=> Ok(DataType::S128),
-            "f16" => Ok(DataType::F16),
-            "f32" => Ok(DataType::F32),
-            "f64" => Ok(DataType::F64),
-            "f128"=> Ok(DataType::F128),
-            _ => Err(Error {
-                    status_code: StatusCode::BAD_GATEWAY,
-                    message: format!("Error when communicating with blobstore"),
-                }),
+impl StdioStream<'_> {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Read for StdioStream<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.stdin.read(buf)
+    }
+}
+
+impl Write for StdioStream<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.stdout.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.stdout.flush()
+    }
+}
+
+impl Default for StdioStream<'_> {
+    fn default() -> Self {
+        Self {
+            stdin: std::io::stdin().lock(),
+            stdout: std::io::stdout().lock(),
         }
+    }
+}
+
+#[cfg(feature = "futures")]
+impl futures::AsyncRead for StdioStream<'_> {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        buf: &mut [u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        std::task::Poll::Ready(self.stdin.read(buf))
+    }
+}
+
+#[cfg(feature = "futures")]
+impl futures::AsyncWrite for StdioStream<'_> {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        std::task::Poll::Ready(self.stdout.write(buf))
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::task::Poll::Ready(self.stdout.flush())
+    }
+
+    fn poll_close(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        self.poll_flush(cx)
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl tokio::io::AsyncRead for StdioStream<'_> {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        let mut fill = vec![0; buf.capacity()];
+        std::task::Poll::Ready({
+            let n = self.stdin.read(&mut fill)?;
+            buf.put_slice(&fill[..n]);
+            Ok(())
+        })
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl tokio::io::AsyncWrite for StdioStream<'_> {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<Result<usize, std::io::Error>> {
+        std::task::Poll::Ready(self.stdout.write(buf))
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), std::io::Error>> {
+        std::task::Poll::Ready(self.stdout.flush())
+    }
+
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), std::io::Error>> {
+        self.poll_flush(cx)
     }
 }

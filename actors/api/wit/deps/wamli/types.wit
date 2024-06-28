@@ -48,6 +48,8 @@ interface types {
       F64,
       /// 128-bit IEEE Float (0x84) (b1000 0100)
       F128,
+      /// Unknown
+      NA
    }
 
    variant status {
@@ -57,6 +59,7 @@ interface types {
 
    variant ml-error {
       invalid-model(string),
+      invalid-metadata(string),
       invalid-encoding(string),
       corrupt-input-tensor(string),
       runtime-error(string),

@@ -156,8 +156,8 @@ show_images() {
 
 wash drain all
 
-# stop_local_registry
-# start_local_registry
+stop_local_registry
+start_local_registry
 
 push_artefact $HTTPSERVER $HTTP_PROVIDER_FILE
 push_artefact $PREPROCESSOR_ACTOR $PREPROCESSOR_ACTOR_FILE

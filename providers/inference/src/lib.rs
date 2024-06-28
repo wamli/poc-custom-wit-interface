@@ -1,6 +1,7 @@
 wit_bindgen_wrpc::generate!();
 
 pub use crate::exports::wamli::ml::inference::{Handler, Status};
+pub use crate::wamli::ml::types::MlError;
 
 // //! Redis implementation for wasmcloud:keyvalue.
 // //!

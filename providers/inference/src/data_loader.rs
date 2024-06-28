@@ -46,8 +46,8 @@ pub enum DataLoaderError {
    #[error("invalid json {0}")]
    ModelLoaderJsonError(String),
 
-//    #[error("Error parsing metadata {0}")]
-//    ModelLoaderMetadataError(String),
+   #[error("Error parsing metadata {0}")]
+   ModelLoaderMetadataError(String),
 
     #[error("Unable to pull image: {0}")]
     OciImageLoadError(String),

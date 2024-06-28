@@ -6,11 +6,11 @@ mod config;
 mod provider;
 mod data_loader;
 
-use provider::AiModelProvider;
+use provider::InferenceProvider;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	AiModelProvider::run().await?;
+	InferenceProvider::run().await?;
 	eprintln!("AI model provider exiting");
 	Ok(())
 }
