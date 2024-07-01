@@ -9,6 +9,8 @@ interface conversion {
 
    record conversion-request {
       tensor: tensor,
+      shape: option<dimensions>,
+      dtype: option<data-type>,
       target-shape: option<dimensions>,
       target-dtype: option<data-type>,
    }
@@ -20,4 +22,3 @@ interface conversion {
    
    convert: func(input: conversion-request) -> conversion-response;
 }
-

@@ -7,11 +7,11 @@ use exports::wamli::ml::conversion::ConversionRequest;
 
 wit_bindgen::generate!();
 
-struct PostProcessor;
+struct ImagenetPostProcessor;
 
-impl Guest for PostProcessor {
+impl Guest for ImagenetPostProcessor {
     fn convert(_input: ConversionRequest) -> ConversionResponse {
-        log(Level::Info, "PostProcessor_01", "------ POST-PROCESSOR RECEIVED CONVERSION REQUEST ------");
+        log(Level::Info, "ImagenetPostProcessor_01", "------ POST-PROCESSOR RECEIVED CONVERSION REQUEST ------");
         
         let tensor = Tensor {
             dimensions: vec![1, 2, 3],
@@ -24,4 +24,4 @@ impl Guest for PostProcessor {
     }
 }
 
-export!(PostProcessor);
+export!(ImagenetPostProcessor);

@@ -1,4 +1,4 @@
-name = "postprocessor"
+name = "imagenetpostprocessor"
 version = "0.1.0"
 language = "rust"
 type = "component"

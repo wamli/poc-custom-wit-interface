@@ -3,14 +3,16 @@ interface conversion {
    use types.{
       tensor,
       dimensions,
-      value-type,
+      data-type,
       status,
    };
 
    record conversion-request {
       tensor: tensor,
-      target-dimensions: option<dimensions>,
-      target-value: option<value-type>,
+      shape: option<dimensions>,
+      dtype: option<data-type>,
+      target-shape: option<dimensions>,
+      target-dtype: option<data-type>,
    }
 
    record conversion-response {
@@ -20,4 +22,3 @@ interface conversion {
    
    convert: func(input: conversion-request) -> conversion-response;
 }
-

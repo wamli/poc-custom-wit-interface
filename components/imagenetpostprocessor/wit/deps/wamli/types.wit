@@ -9,20 +9,17 @@ interface types {
    }
    
    record tensor {
-      dimensions: dimensions,
-      value-types: value-types,
-      bit-flags: u8,
+      shape: dimensions,
+      dtype: data-type,
       data: list<u8>,
    }   
 
    type dimensions = list<dimension>;
 
    type dimension = u32;
-   
-   type value-types = list<value-type>;
 
    /// Value of a data element in a tensor
-   enum value-type {
+   enum data-type {
       /// Unsigned 8-bit data (0x00) (b0000 0000)
       U8,
       /// Unsigned 16-bit data (0x01) (b0000 0001)
@@ -51,6 +48,8 @@ interface types {
       F64,
       /// 128-bit IEEE Float (0x84) (b1000 0100)
       F128,
+      /// Unknown
+      NA
    }
 
    variant status {
@@ -60,6 +59,7 @@ interface types {
 
    variant ml-error {
       invalid-model(string),
+      invalid-metadata(string),
       invalid-encoding(string),
       corrupt-input-tensor(string),
       runtime-error(string),
