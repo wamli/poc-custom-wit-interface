@@ -1,35 +1,20 @@
-// package wamli:ml;
-
-// An interface for receiving (immutable) state from an actor
 interface inference {
-   
-
    use types.{
       tensor,
-      status,
+      ml-error
    };
-
-   record inference-input {
-      model: string,
+   
+   predict: func(
+      model-id: string,
       tensor: tensor,
-      index: u32,
-   }
-
-   record inference-output {
-      status: status,
-      tensor: tensor,   
-   }
+   ) -> result<tensor, ml-error>;
    
-   predict: func(input: string) -> string;
-   // predict: func(input: inference-input) -> inference-output;
-   // predict: func(input: u32) -> bool;
-   
-   // fake-it: func() -> bool;
-
    /// Initiate the load of given ai model.
    /// `model-id` is supposed to be a valid OCI image name, e.g. 
    /// * mobilenetv27:latest
    /// * mobilenetv27:42.0
    /// The implementor will try to pull it from a given OCI registry.
-   prefetch: func(model-id: string) -> status;
+   prefetch: func(
+      model-id: string
+   ) -> result<ml-error>;
 }

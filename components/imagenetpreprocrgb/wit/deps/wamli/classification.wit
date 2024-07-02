@@ -1,0 +1,11 @@
+interface classification {   
+   use types.{
+      tensor,
+      ml-error,
+      classifications,
+   };
+
+   classify: func(
+      request: tensor
+   ) -> result<classifications, ml-error>;
+}

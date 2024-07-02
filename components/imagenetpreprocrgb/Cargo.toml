@@ -1,0 +1,15 @@
+[package]
+name = "imagenetpreprocrgb"
+edition = "2021"
+version = "0.1.0"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ndarray = "0.15"
+byteorder = "1.5"
+wit-bindgen = { version = "0.24", features = ["default"] }
+image = { version = "0.25", default-features = false, features = ["gif", "jpeg", "png", "tiff", "webp", "bmp"]  }

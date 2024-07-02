@@ -9,4 +9,6 @@ version = "0.1.0"
 crate-type = ["cdylib"]
 
 [dependencies]
+ndarray = "0.15"
+byteorder = "1.5"
 wit-bindgen = { version = "0.24", features = ["default"] }

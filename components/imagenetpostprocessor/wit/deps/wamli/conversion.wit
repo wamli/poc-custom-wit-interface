@@ -1,24 +1,14 @@
-// An interface for receiving (immutable) state from an actor
 interface conversion {   
    use types.{
       tensor,
       dimensions,
       data-type,
-      status,
+      ml-error,
    };
-
-   record conversion-request {
-      tensor: tensor,
-      shape: option<dimensions>,
-      dtype: option<data-type>,
-      target-shape: option<dimensions>,
-      target-dtype: option<data-type>,
-   }
-
-   record conversion-response {
-      status: status,
-      tensor: tensor,   
-   }
    
-   convert: func(input: conversion-request) -> conversion-response;
+   convert: func(
+      tensor: tensor, 
+      to-shape: option<dimensions>, 
+      to-dtype: option<data-type>
+   ) -> result<tensor, ml-error>;
 }

@@ -1,22 +1,27 @@
-// package wamli:ml;
-
 interface types {
-   // use wasi:io/streams@0.2.0.{input-stream, output-stream};
-   enum execution-target {
-      cpu,
-      gpu,
-      tpu,
-   }
-   
+  
+   type classifications = list<classification>;
+
+   type dimensions = list<dimension>;
+
+   type dimension = u32;
+
    record tensor {
       shape: dimensions,
       dtype: data-type,
       data: list<u8>,
    }   
 
-   type dimensions = list<dimension>;
+   record classification {
+      label: string,
+      probability: float32,
+   }
 
-   type dimension = u32;
+   enum execution-target {
+      cpu,
+      gpu,
+      tpu,
+   }
 
    /// Value of a data element in a tensor
    enum data-type {
@@ -53,11 +58,13 @@ interface types {
    }
 
    variant status {
-      success(bool),
+      success,
       error(ml-error),
    }
 
    variant ml-error {
+      internal(string),
+      processor(string),
       invalid-model(string),
       invalid-metadata(string),
       invalid-encoding(string),

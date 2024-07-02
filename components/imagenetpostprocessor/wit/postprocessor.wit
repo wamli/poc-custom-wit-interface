@@ -3,5 +3,5 @@ package wamli:mlinference;
 world postprocessing {
   import wasi:logging/logging;
   
-  export wamli:ml/conversion;
+  export wamli:ml/classification;
 }

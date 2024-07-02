@@ -1,20 +1,13 @@
 wit_bindgen::generate!();
 
-use http::{
-    header::{ALLOW, CONTENT_LENGTH}
-};
-
-use urlencoding::decode; 
-use serde_json::from_str; 
-use std::io::{self, Read, Write};
 use http::StatusCode;
-// use serde::{de::value, Deserialize, Serialize};
+use urlencoding::decode; 
 use wasi::http::types::*;
+use serde_json::from_str; 
+use std::io::{Read, Write};
+use wamli::ml::inference::prefetch;
 use crate::wasi::logging::logging::*;
 use crate::wamli::ml::inference::predict;
-use crate::wasi::io::streams::StreamError;
-use crate::wamli::ml::conversion::convert;
-use wamli::ml::{conversion::ConversionRequest, inference::prefetch};
 use exports::wasi::http::incoming_handler::Guest;
 use crate::wamli::ml::conversion::{Tensor, DataType};
 
@@ -200,7 +193,7 @@ impl Guest for Api {
                     data: body,
                 };
 
-                let prediction = predict("Greeting from api!");
+                let prediction = predict(model_id, &tensor);
                 log(Level::Info, "", &format!("-------> PREDICTION received: {:?}", prediction));
             },
 
