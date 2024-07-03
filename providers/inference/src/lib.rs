@@ -1,7 +1,14 @@
+pub mod inference;
+
 wit_bindgen_wrpc::generate!();
 
-pub use crate::exports::wamli::ml::inference::{Handler, Status};
+pub use crate::exports::wamli::ml::inference::Handler;
 pub use crate::wamli::ml::types::MlError;
+pub use crate::wamli::ml::types::Tensor;
+
+// pub type Engine = Arc<Box<dyn InferenceEngine + Send + Sync>>;
+
+
 
 // //! Redis implementation for wasmcloud:keyvalue.
 // //!

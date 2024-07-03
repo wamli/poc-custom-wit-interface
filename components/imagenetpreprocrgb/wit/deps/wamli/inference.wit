@@ -16,5 +16,5 @@ interface inference {
    /// The implementor will try to pull it from a given OCI registry.
    prefetch: func(
       model-id: string
-   ) -> result<ml-error>;
+   ) -> result<_,ml-error>;
 }

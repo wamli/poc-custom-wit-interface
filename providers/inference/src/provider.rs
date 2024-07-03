@@ -1,16 +1,19 @@
 // wit_bindgen_wrpc::generate!();
 
 use std::sync::Arc;
+use anyhow::anyhow;
 use tokio::sync::RwLock;
 use anyhow::Context as _;
-use tracing::{debug, info, warn, error};
 use std::collections::HashMap;
+use inference::{Handler, serve};
+use tracing::{debug, info, warn};
+use inference::wamli::ml::types::{Tensor, DataType, MlError};
 use crate::config::{ModelContext, ModelZoo, ProviderConfig, CONFIG_URL_KEY, DEFAULT_CONNECT_URL, MEDIA_TYPE};
 use crate::data_loader::{pull_model_and_metadata, DataLoaderError, DataLoaderResult};
 
 use wasmcloud_provider_sdk::{run_provider, Context, LinkConfig, Provider, ProviderInitConfig};
 
-use inference::{Handler, serve, Status, MlError};
+use inference::inference::{Engine, InferenceFramework};
 
 #[derive(Default, Clone)]
 pub struct InferenceProvider {
@@ -25,6 +28,21 @@ pub struct InferenceProvider {
     models: Arc<RwLock<ModelZoo>>,
 
     config: Arc<RwLock<ProviderConfig>>,
+    
+    /// There are the following relevant types:
+    ///     - InferenceFramework
+    ///     - Engine
+    ///     - InferenceEngine
+    ///     - GraphEncoding
+    ///
+    /// InferenceFramework corresponds to an integrated crate.
+    /// An InferenceFramework may support a multitude of Engine
+    /// An InferenceFramework may support a multitude of GraphEncoding.
+    /// Engine is a wrapper of InferenceEngine
+    /// InferenceEngine defines common behavior
+    /// GraphEncoding defines a model's encoding.
+    engines: Arc<RwLock<HashMap<InferenceFramework, Engine>>>,
+
     /// All components linked to this provider and their config.
     linked_from: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
     /// All components this provider is linked to and their config
@@ -112,19 +130,23 @@ impl InferenceProvider {
 /// link to the provider. The `Handler` trait is generated for each export in the WIT world.
 impl Handler<Option<Context>> for InferenceProvider {
 
-    async fn predict(&self, _ctx: Option<Context>, _input: String) -> anyhow::Result<String> {
-        let x = "anything";
-        let y = "something";
-        warn!("-----------------> inference provider PREDICTING ... the future");
-        info!(x, y, "-----------------> inference provider PREDICTING ... the future");
-        Ok(String::from("Greetings from ml provider!"))
+    async fn predict(&self, _ctx: Option<Context>,_model_id: String, _tensor: Tensor) -> anyhow::Result<Result<Tensor, MlError>> {
+        info!("PREDICTING ... the future");
+
+        let out_tensor = Tensor {
+            shape: vec![],
+            dtype: DataType::F32,
+            data: vec![]
+        };
+
+        Ok(Ok(out_tensor))
    }
 
-   async fn prefetch(&self, _ctx: Option<Context>, image_ref: String) -> anyhow::Result<Status> {
-    info!("prefetching model '{}'", image_ref);
+   async fn prefetch(&self, _ctx: Option<Context>, model_id: String) -> anyhow::Result<Result<(),MlError>> {
+    info!("prefetching model '{}'", model_id);
 
-    if let Err(error) = self.fetch_model(image_ref).await {
-        return Ok(Status::Error(MlError::InvalidMetadata(format!("Loading model's metadata from OCI image failed: {}", error))));
+    if let Err(error) = self.fetch_model(model_id).await {
+        return Err(MlError::Internal(format!("{}", error.to_string())).into());
     };
 
     // let config_guard = self.config.read().await;
@@ -166,9 +188,7 @@ impl Handler<Option<Context>> for InferenceProvider {
     //     };
     // }
 
-    let status = Status::Success(true);
-
-    Ok(status)
+    Ok(Ok(()))
 }
 
    ///// Request information about the system the provider is running on

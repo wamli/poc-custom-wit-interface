@@ -3,6 +3,7 @@ interface conversion {
       tensor,
       dimensions,
       data-type,
+      ml-error,
    };
    
    convert: func(
