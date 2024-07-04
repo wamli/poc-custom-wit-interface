@@ -1,16 +1,22 @@
 #[cfg(feature = "tflite")]
-// mod tflite;
-// mod tract;
+mod tflite;
+
+mod tract;
 
 #[cfg(any(feature = "tflite", feature = "edgetpu"))]
 pub use self::tflite::TfLiteEngine;
 
 use std::sync::Arc;
+use std::str::FromStr;
 use async_trait::async_trait;
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-pub use tract::{bytes_to_f32_vec, f32_array_to_bytes, TractEngine, TractSession};
+use crate:: data_loader::{DataLoaderError, ModelMetadata};
+
+// pub use tract::{bytes_to_f32_vec, f32_array_to_bytes, TractEngine, TractSession};
+
 // use wasmcloud_interface_mlinference::{InferenceOutput, Tensor};
-use crate::Tensor;
+use crate::{DataType, Tensor};
 
 /// Graph (model number)
 pub type Graph = u32;
@@ -19,6 +25,9 @@ pub type Engine = Arc<Box<dyn InferenceEngine + Send + Sync>>;
 
 /// GraphExecutionContext
 pub type GraphExecutionContext = u32;
+
+pub type ModelId = String;
+pub type ModelZoo = HashMap<ModelId, ModelContext>;
 
 /// GraphEncoding
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -45,15 +54,77 @@ pub enum ExecutionTarget {
     #[default]
     Cpu,
     Gpu,
+    Npu,
     Tpu,
 }
 
-impl Default for Box<dyn InferenceEngine + Send + Sync> {
-    fn default() -> Box<dyn InferenceEngine + Send + Sync>
-    where
-        Self: Sized,
-    {
-        Box::new(<TractEngine as Default>::default())
+// #[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModelContext {
+    pub model_name: String,
+    pub graph_encoding: GraphEncoding,
+    pub execution_target: ExecutionTarget,
+    pub dtype: DataType,
+    pub graph_execution_context: GraphExecutionContext,
+    pub graph: Graph,
+}
+
+impl ModelContext {
+    pub fn default() -> ModelContext {
+        ModelContext {
+            model_name: Default::default(),
+            graph_encoding: Default::default(),
+            execution_target: Default::default(),
+            dtype: DataType::F32,
+            graph_execution_context: Default::default(),
+            graph: Default::default(),
+        }
+    }
+
+    /// load metadata
+    pub fn load_metadata(
+        &mut self,
+        metadata: ModelMetadata,
+    ) -> Result<&ModelContext, DataLoaderError> {
+        self.model_name = metadata.model_name;
+        self.graph_encoding = GraphEncoding::Onnx;
+        self.execution_target = ExecutionTarget::Cpu;
+
+        Ok(self)
+    }
+}
+
+impl FromStr for GraphEncoding {
+    type Err = DataLoaderError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "onnx" => Ok(GraphEncoding::Onnx),
+            "tflite" => Ok(GraphEncoding::TfLite),
+            "openvino" => Ok(GraphEncoding::OpenVino),
+            "tensorflow" => Ok(GraphEncoding::Tensorflow),
+            _ => Err(DataLoaderError::ModelLoaderMetadataError(format!(
+                "Invalid graph encoding: '{}'",
+                s
+            ))),
+        }
+    }
+}
+
+impl FromStr for ExecutionTarget {
+    type Err = DataLoaderError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "cpu" => Ok(ExecutionTarget::Cpu),
+            "tpu" => Ok(ExecutionTarget::Tpu),
+            "gpu" => Ok(ExecutionTarget::Gpu),
+            "npu" => Ok(ExecutionTarget::Npu),
+            _ => Err(DataLoaderError::ModelLoaderMetadataError(format!(
+                "Invalid execution target: '{}'",
+                s
+            ))),
+        }
     }
 }
 
@@ -82,10 +153,19 @@ pub trait InferenceEngine {
         &self,
         context: GraphExecutionContext,
         index: u32,
-    ) -> InferenceResult<InferenceOutput>;
+    ) -> InferenceResult<Tensor>;
 
     async fn drop_model_state(&self, graph: &Graph, gec: &GraphExecutionContext);
 }
+
+// impl Default for Box<dyn InferenceEngine + Send + Sync> {
+//     fn default() -> Box<dyn InferenceEngine + Send + Sync>
+//     where
+//         Self: Sized,
+//     {
+//         Box::new(<TractEngine as Default>::default())
+//     }
+// }
 
 /// InferenceResult
 pub type InferenceResult<T> = Result<T, InferenceError>;
@@ -125,8 +205,11 @@ pub enum InferenceError {
     #[error("Corrupt input tensor")]
     CorruptInputTensor,
 
-    #[error("Model reshape failed")]
-    ShapeError(#[from] ndarray::ShapeError),
+    #[error("Re-shaping of tensor failed {0}")]
+    ReShapeError(String),
+
+    // #[error("Model reshape failed")]
+    // ShapeError(#[from] ndarray::ShapeError),
 
     #[error("Bytes to f32 vec conversion failed")]
     BytesToVecConversionError(#[from] std::io::Error),

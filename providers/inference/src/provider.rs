@@ -1,19 +1,17 @@
 // wit_bindgen_wrpc::generate!();
 
+use crate::MlError;
 use std::sync::Arc;
-use anyhow::anyhow;
 use tokio::sync::RwLock;
 use anyhow::Context as _;
 use std::collections::HashMap;
-use inference::{Handler, serve};
 use tracing::{debug, info, warn};
-use inference::wamli::ml::types::{Tensor, DataType, MlError};
-use crate::config::{ModelContext, ModelZoo, ProviderConfig, CONFIG_URL_KEY, DEFAULT_CONNECT_URL, MEDIA_TYPE};
+use crate::{Handler, serve, Tensor, DataType};
+use crate::engine::{Engine, InferenceFramework, ModelContext, ModelZoo};
+use crate::config::{ProviderConfig, CONFIG_URL_KEY, DEFAULT_CONNECT_URL, MEDIA_TYPE};
 use crate::data_loader::{pull_model_and_metadata, DataLoaderError, DataLoaderResult};
-
 use wasmcloud_provider_sdk::{run_provider, Context, LinkConfig, Provider, ProviderInitConfig};
 
-use inference::inference::{Engine, InferenceFramework};
 
 #[derive(Default, Clone)]
 pub struct InferenceProvider {
