@@ -8,10 +8,15 @@ pub use self::tflite::TfLiteEngine;
 
 use std::sync::Arc;
 use std::str::FromStr;
+use tokio::sync::RwLock;
 use async_trait::async_trait;
 use std::collections::HashMap;
+use crate::engine::tract::TractEngine;
 use serde::{Deserialize, Serialize};
 use crate:: data_loader::{DataLoaderError, ModelMetadata};
+
+#[cfg(any(feature = "tflite", feature = "edgetpu"))]
+use crate::engine::tflite::TfLiteEngine;
 
 // pub use tract::{bytes_to_f32_vec, f32_array_to_bytes, TractEngine, TractSession};
 
@@ -166,6 +171,134 @@ pub trait InferenceEngine {
 //         Box::new(<TractEngine as Default>::default())
 //     }
 // }
+
+
+pub async fn get_engine(
+    engines: Arc<RwLock<HashMap<InferenceFramework, Engine>>>, 
+    context: &ModelContext
+) -> InferenceResult<Engine> {
+    let engines_lock = engines.write().await;
+
+    log::debug!("get_engine() - context: {:?}", &context);
+
+    match context.graph_encoding {
+        GraphEncoding::Onnx | GraphEncoding::Tensorflow => {
+            match engines_lock.get(&InferenceFramework::Tract) {
+                Some(e) => Ok(e.clone()),
+                None => Err(InferenceError::InvalidEncodingError),
+            }
+        },
+
+        #[cfg(any(feature = "tflite", feature = "edgetpu"))]
+        GraphEncoding::TfLite => match engines_lock.get(&InferenceFramework::TfLite) {
+            Some(e) => Ok(e.clone()),
+            None => Err(InferenceError::InvalidEncodingError),
+        },
+
+        _ => {
+            log::error!(
+                "get_engine() - unsupported graph encoding detected '{:?}'",
+                &context.graph_encoding
+            );
+            Err(InferenceError::InvalidEncodingError)
+        }
+    }
+}
+
+    /// Each link definition may address a different target
+    /// such that it may be necessary to support multiple engines.
+    pub async fn get_or_else_set_engine(
+        engines: Arc<RwLock<HashMap<InferenceFramework, Engine>>>,
+        context: &ModelContext,
+    ) -> InferenceResult<Engine> {
+        let mut engines_lock = engines.write().await;
+
+        match context.graph_encoding {
+            GraphEncoding::Onnx | GraphEncoding::Tensorflow => {
+                match engines_lock.get(&InferenceFramework::Tract) {
+                    Some(e) => {
+                        log::debug!("get_or_else_set_engine() - previously created Onnx/Tensorflow engine selected for '{}'.", context.model_name);
+                        Ok(e.clone())
+                    }
+                    None => {
+                        let feedback = engines_lock.insert(
+                            InferenceFramework::Tract,
+                            Arc::new(Box::new(TractEngine::default())),
+                        );
+                        log::debug!("get_or_else_set_engine() - Onnx/Tensorflow engine selected and created for '{}'.", context.model_name);
+
+                        if feedback.is_none() {
+                            log::debug!(
+                                "get_or_else_set_engine() - Onnx/Tensorflow was definitely created"
+                            );
+                        } else {
+                            log::debug!(
+                                "get_or_else_set_engine() - Onnx/Tensorflow was NOT created!"
+                            );
+                        }
+
+                        log::debug!(
+                            "get_or_else_set_engine() - content of Engines: {:?}: with length {:?}",
+                            &engines_lock.keys(),
+                            &engines_lock.keys().len()
+                        );
+
+                        //assert_eq!(engines_lock.is_empty(), false);
+
+                        Ok(engines_lock
+                            .get(&InferenceFramework::Tract)
+                            .unwrap()
+                            .clone())
+                    }
+                }
+            }
+
+            #[cfg(any(feature = "tflite", feature = "edgetpu"))]
+            GraphEncoding::TfLite => {
+                match engines_lock.get(&InferenceFramework::TfLite) {
+                    Some(e) => {
+                        log::debug!("get_or_else_set_engine() - previously created TfLite engine selected for '{}'.", context.model_name);
+                        Ok(e.clone())
+                    }
+                    None => {
+                        let feedback = engines_lock.insert(
+                            InferenceFramework::TfLite,
+                            Arc::new(Box::new(TfLiteEngine::default())),
+                        );
+                        log::debug!("get_or_else_set_engine() - TfLite engine selected and created for '{}'.", context.model_name);
+
+                        if feedback.is_none() {
+                            log::debug!(
+                                "get_or_else_set_engine() - TfLite engine was definitely created"
+                            );
+                        } else {
+                            log::debug!("get_or_else_set_engine() - TfLite was NOT created!");
+                        }
+
+                        log::debug!(
+                            "get_or_else_set_engine() - content of Engines: {:?}: with length {:?}",
+                            &engines_lock.keys(),
+                            &engines_lock.keys().len()
+                        );
+
+                        Ok(engines_lock
+                            .get(&InferenceFramework::TfLite)
+                            .unwrap()
+                            .clone())
+                    }
+                }
+            }
+            _ => {
+                log::error!(
+                    "unsupported graph encoding detected '{:?}'",
+                    &context.graph_encoding
+                );
+                Err(InferenceError::InvalidEncodingError)
+            }
+        }
+    }
+
+
 
 /// InferenceResult
 pub type InferenceResult<T> = Result<T, InferenceError>;

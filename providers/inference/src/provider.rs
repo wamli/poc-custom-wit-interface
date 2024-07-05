@@ -7,6 +7,7 @@ use anyhow::Context as _;
 use std::collections::HashMap;
 use tracing::{debug, info, warn};
 use crate::{Handler, serve, Tensor, DataType};
+use crate::engine::{get_engine, GraphEncoding, InferenceError, InferenceResult};
 use crate::engine::{Engine, InferenceFramework, ModelContext, ModelZoo};
 use crate::config::{ProviderConfig, CONFIG_URL_KEY, DEFAULT_CONNECT_URL, MEDIA_TYPE};
 use crate::data_loader::{pull_model_and_metadata, DataLoaderError, DataLoaderResult};
@@ -128,7 +129,12 @@ impl InferenceProvider {
 /// link to the provider. The `Handler` trait is generated for each export in the WIT world.
 impl Handler<Option<Context>> for InferenceProvider {
 
-    async fn predict(&self, _ctx: Option<Context>,_model_id: String, _tensor: Tensor) -> anyhow::Result<Result<Tensor, MlError>> {
+    async fn predict(
+        &self, 
+        _ctx: Option<Context>, 
+        model_id: String, 
+        _tensor: Tensor
+    ) -> anyhow::Result<Result<Tensor, MlError>> {
         info!("PREDICTING ... the future");
 
         let out_tensor = Tensor {
@@ -137,123 +143,62 @@ impl Handler<Option<Context>> for InferenceProvider {
             data: vec![]
         };
 
+        let models_lock = self.models.read().await;
+        let model_context = models_lock.get(&model_id).unwrap();
+
+        let _engine = get_engine(self.engines.clone(), model_context).await?;
+
         Ok(Ok(out_tensor))
    }
 
-   async fn prefetch(&self, _ctx: Option<Context>, model_id: String) -> anyhow::Result<Result<(),MlError>> {
-    info!("prefetching model '{}'", model_id);
+    async fn prefetch(&self, _ctx: Option<Context>, model_id: String) -> anyhow::Result<Result<(),MlError>> {
+        info!("prefetching model '{}'", model_id);
 
-    if let Err(error) = self.fetch_model(model_id).await {
-        return Err(MlError::Internal(format!("{}", error.to_string())).into());
-    };
+        if let Err(error) = self.fetch_model(model_id).await {
+            return Err(MlError::Internal(format!("{}", error.to_string())).into());
+        };
 
-    // let config_guard = self.config.read().await;
+        // let config_guard = self.config.read().await;
 
-    // let registry = match config_guard.values.get(CONFIG_URL_KEY) {
-    //     Some(url) => url,
-    //     None => DEFAULT_CONNECT_URL,
-    // };
+        // let registry = match config_guard.values.get(CONFIG_URL_KEY) {
+        //     Some(url) => url,
+        //     None => DEFAULT_CONNECT_URL,
+        // };
 
-    // let oci_image = registry.to_owned() + "/" + &image_ref;
+        // let oci_image = registry.to_owned() + "/" + &image_ref;
 
-    // info!("executing PREFETCH with registry '{}', model '{}' and image '{}'", registry, image_ref, &oci_image);
+        // info!("executing PREFETCH with registry '{}', model '{}' and image '{}'", registry, image_ref, &oci_image);
 
-    // let model_data = pull_model_and_metadata(&oci_image, MEDIA_TYPE).await.unwrap();
+        // let model_data = pull_model_and_metadata(&oci_image, MEDIA_TYPE).await.unwrap();
 
-    // info!("PREFETCHED - metadata '{:?}' and model of size '{}'", model_data.metadata, model_data.model.len());
+        // info!("PREFETCHED - metadata '{:?}' and model of size '{}'", model_data.metadata, model_data.model.len());
 
-    // let mut models_lock = self.models.write().await;
+        // let mut models_lock = self.models.write().await;
 
-    // let is_model_already_loaded = models_lock.get(&oci_image);
+        // let is_model_already_loaded = models_lock.get(&oci_image);
 
-    // // Evaluate if the model defined by `oci_image` is already known.
-    // // If not, add it to the list of modules
-    // if is_model_already_loaded.is_some() {
-    //     warn!("PREFETCHED - model '{}' is already loaded", &oci_image);
-    // }
+        // // Evaluate if the model defined by `oci_image` is already known.
+        // // If not, add it to the list of modules
+        // if is_model_already_loaded.is_some() {
+        //     warn!("PREFETCHED - model '{}' is already loaded", &oci_image);
+        // }
 
-    // if is_model_already_loaded.is_none() {
-    //     let mut default_context = ModelContext::default();
-    //     let model_context = default_context
-    //         .load_metadata(model_data.metadata);
+        // if is_model_already_loaded.is_none() {
+        //     let mut default_context = ModelContext::default();
+        //     let model_context = default_context
+        //         .load_metadata(model_data.metadata);
 
-    //     match model_context {
-    //         Ok(mc) => models_lock.insert(oci_image.to_owned(), mc.clone()),
+        //     match model_context {
+        //         Ok(mc) => models_lock.insert(oci_image.to_owned(), mc.clone()),
 
-    //         Err(error) => {
-    //             return Ok(Status::Error(MlError::InvalidMetadata(format!("Loading model's metadata from OCI image failed: {}", error))));
-    //         }
-    //     };
-    // }
+        //         Err(error) => {
+        //             return Ok(Status::Error(MlError::InvalidMetadata(format!("Loading model's metadata from OCI image failed: {}", error))));
+        //         }
+        //     };
+        // }
 
-    Ok(Ok(()))
-}
-
-   ///// Request information about the system the provider is running on
-   // async fn request_info(&self, ctx: Option<Context>, kind: Kind) -> anyhow::Result<String> {
-   //     // The `ctx` contains information about the component that invoked the request. You can use
-   //     // this information to look up the configuration of the component that invoked the request.
-   //     let requesting_component = ctx
-   //         .and_then(|c| c.component)
-   //         .unwrap_or_else(|| "UNKNOWN".to_string());
-   //     let component_config = self
-   //         .linked_from
-   //         .read()
-   //         .await
-   //         .get(&requesting_component)
-   //         .cloned()
-   //         .unwrap_or_default();
-
-   //     info!(
-   //         requesting_component,
-   //         ?kind,
-   //         ?component_config,
-   //         "received request for system information"
-   //     );
-
-   //     let info = match kind {
-   //         Kind::Os => std::env::consts::OS,
-   //         Kind::Arch => std::env::consts::ARCH,
-   //     };
-   //     Ok(format!("{info}"))
-   // }
-
-   // /// Request the provider to send some data to all linked components
-   // ///
-   // /// This function is easy to invoke with `wash call`,
-   // async fn call(&self, _ctx: Option<Context>) -> anyhow::Result<String> {
-   //     info!("received call to send data to linked components");
-   //     let mut last_response = None;
-   //     for (component_id, config) in self.linked_to.read().await.iter() {
-   //         debug!(component_id, ?config, "sending data to component");
-   //         let sample_data = Data {
-   //             name: "sup".to_string(),
-   //             count: 3,
-   //         };
-   //         let client = wasmcloud_provider_sdk::get_connection().get_wrpc_client(component_id);
-   //         match process_data::process(&client, &sample_data).await {
-   //             Ok(response) => {
-   //                 last_response = Some(response);
-   //                 info!(
-   //                     component_id,
-   //                     ?config,
-   //                     ?last_response,
-   //                     "successfully sent data to component"
-   //                 );
-   //             }
-   //             Err(e) => {
-   //                 error!(
-   //                     component_id,
-   //                     ?config,
-   //                     ?e,
-   //                     "failed to send data to component"
-   //                 );
-   //             }
-   //         }
-   //     }
-
-   //     Ok(last_response.unwrap_or_else(|| "No components responded to request".to_string()))
-   // }
+        Ok(Ok(()))
+    }
 }
 
 impl Provider for InferenceProvider {
@@ -372,4 +317,8 @@ impl Provider for InferenceProvider {
 
         Ok(())
     }
+}
+
+impl InferenceProvider {
+
 }
