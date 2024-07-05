@@ -1,18 +1,23 @@
-// wit_bindgen_wrpc::generate!();
-
-use crate::MlError;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use crate::config::{ProviderConfig, CONFIG_URL_KEY, DEFAULT_CONNECT_URL};
+use crate::data_loader::{self, ModelRawData};
+use crate::engine::{
+    get_engine, get_or_else_set_engine, Engine, ExecutionTarget, Graph, GraphEncoding,
+    GraphExecutionContext, InferenceFramework, ModelContext, ModelZoo,
+};
+use crate::{serve, DataType, Handler, MlError, Tensor};
+use anyhow::anyhow;
 use anyhow::Context as _;
 use std::collections::HashMap;
+use std::str::FromStr;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
-use crate::{Handler, serve, Tensor, DataType};
-use crate::engine::{get_engine, GraphEncoding, InferenceError, InferenceResult};
-use crate::engine::{Engine, InferenceFramework, ModelContext, ModelZoo};
-use crate::config::{ProviderConfig, CONFIG_URL_KEY, DEFAULT_CONNECT_URL, MEDIA_TYPE};
-use crate::data_loader::{pull_model_and_metadata, DataLoaderError, DataLoaderResult};
 use wasmcloud_provider_sdk::{run_provider, Context, LinkConfig, Provider, ProviderInitConfig};
 
+pub struct ModelData {
+    pub model: Vec<u8>,
+    pub metadata: ModelContext,
+}
 
 #[derive(Default, Clone)]
 pub struct InferenceProvider {
@@ -27,7 +32,7 @@ pub struct InferenceProvider {
     models: Arc<RwLock<ModelZoo>>,
 
     config: Arc<RwLock<ProviderConfig>>,
-    
+
     /// There are the following relevant types:
     ///     - InferenceFramework
     ///     - Engine
@@ -49,77 +54,90 @@ pub struct InferenceProvider {
 }
 
 impl InferenceProvider {
-   /// Execute the provider, loading [`HostData`] from the host which includes the provider's configuration and
-   /// information about the host. Once you use the passed configuration to construct a [`InferenceProvider`],
-   /// you can run the provider by calling `run_provider` and then serving the provider's exports on the proper
-   /// RPC topics via `wrpc::serve`.
-   ///
-   /// This step is essentially the same for every provider, and you shouldn't need to modify this function.
+    /// Execute the provider, loading [`HostData`] from the host which includes the provider's configuration and
+    /// information about the host. Once you use the passed configuration to construct a [`InferenceProvider`],
+    /// you can run the provider by calling `run_provider` and then serving the provider's exports on the proper
+    /// RPC topics via `wrpc::serve`.
+    ///
+    /// This step is essentially the same for every provider, and you shouldn't need to modify this function.
     pub async fn run() -> anyhow::Result<()> {
-       let provider = Self::default();
-       let shutdown = run_provider(provider.clone(), "custom-template-provider")
-           .await
-           .context("failed to run provider")?;
+        let provider = Self::default();
+        let shutdown = run_provider(provider.clone(), "custom-template-provider")
+            .await
+            .context("failed to run provider")?;
 
-       // The [`serve`] function will set up RPC topics for your provider's exports and await invocations.
-       // This is a generated function based on the contents in your `wit/world.wit` file.
-       let connection = wasmcloud_provider_sdk::get_connection();
-       serve(
-           &connection.get_wrpc_client(connection.provider_key()),
-           provider,
-           shutdown,
-       )
-       .await
+        // The [`serve`] function will set up RPC topics for your provider's exports and await invocations.
+        // This is a generated function based on the contents in your `wit/world.wit` file.
+        let connection = wasmcloud_provider_sdk::get_connection();
+        serve(
+            &connection.get_wrpc_client(connection.provider_key()),
+            provider,
+            shutdown,
+        )
+        .await
 
-       // If your provider has no exports, simply await the shutdown to keep the provider running
-       // shutdown.await;
-       // Ok(())
-   }
+        // If your provider has no exports, simply await the shutdown to keep the provider running
+        // shutdown.await;
+        // Ok(())
+    }
 
-   pub async fn fetch_model(&self, image_ref: String) -> DataLoaderResult<()> {
+    pub async fn get_registry(&self) -> String {
         let config_guard = self.config.read().await;
 
         let registry = match config_guard.values.get(CONFIG_URL_KEY) {
-            Some(url) => url,
-            None => DEFAULT_CONNECT_URL,
+            Some(url) => url.to_string(),
+            None => DEFAULT_CONNECT_URL.to_string(),
         };
 
-        let oci_image = registry.to_owned() + "/" + &image_ref;
+        registry
+    }
 
-        info!("executing PREFETCH with registry '{}', model '{}' and image '{}'", registry, image_ref, &oci_image);
+    pub async fn register_model(
+        &self,
+        model_id: &str,
+        model_data: ModelRawData,
+    ) -> anyhow::Result<()> {
+        let metadata = model_data.metadata;
 
-        let model_data = pull_model_and_metadata(&oci_image, MEDIA_TYPE).await.unwrap();
+        let graph_encoding = GraphEncoding::from_str(&metadata.graph_encoding)
+            .map_err(|error| anyhow!(error.to_string()))?;
 
-        info!("PREFETCHED - metadata '{:?}' and model of size '{}'", model_data.metadata, model_data.model.len());
+        let execution_target = ExecutionTarget::from_str(&metadata.execution_target)
+            .map_err(|error| anyhow!(error.to_string()))?;
+
+        let data_type = DataType::from_str(&metadata.execution_target)
+            .map_err(|error| anyhow!(error.to_string()))?;
+
+        let engine = get_or_else_set_engine(Arc::clone(&self.engines), &graph_encoding).await?;
+
+        let graph: Graph = engine
+            .load(&model_data.model)
+            .await
+            .map_err(|error| anyhow!(error.to_string()))?;
+
+        let gec: GraphExecutionContext = engine
+            .init_execution_context(graph, &execution_target, &graph_encoding)
+            .await
+            .map_err(|error| anyhow!(error.to_string()))?;
+
+        let model_context = ModelContext {
+            model_name: model_id.to_owned(),
+            graph_encoding: graph_encoding,
+            execution_target: execution_target,
+            dtype: data_type,
+            graph: graph,
+            graph_execution_context: gec,
+        };
 
         let mut models_lock = self.models.write().await;
 
-        let is_model_already_loaded = models_lock.get(&oci_image);
-
-        // Evaluate if the model defined by `oci_image` is already known.
-        // If not, add it to the list of modules
-        if is_model_already_loaded.is_some() {
-            warn!("PREFETCHED - model '{}' is already loaded", &oci_image);
-        }
-
-        if is_model_already_loaded.is_none() {
-            let mut default_context = ModelContext::default();
-            let model_context = default_context
-                .load_metadata(model_data.metadata);
-
-            match model_context {
-                Ok(mc) => {
-                    models_lock.insert(oci_image.to_owned(), mc.clone());
-                },
-
-                Err(error) => {
-                    return Err(DataLoaderError::ModelLoaderMetadataError(format!("Error loading model: {}", error)));
-                }
-            };
-            info!("PREFETCHED - no. of registered models '{}'", models_lock.len());
-
-            return Ok(());
-        }
+        if let Some(already_context) = models_lock.insert(model_id.to_owned(), model_context) {
+            log::warn!(
+                "model '{}' is already registered: {:?}",
+                model_id,
+                already_context
+            );
+        };
         Ok(())
     }
 }
@@ -128,83 +146,98 @@ impl InferenceProvider {
 /// a trait that the provider must implement. This trait is used to handle invocations from components that
 /// link to the provider. The `Handler` trait is generated for each export in the WIT world.
 impl Handler<Option<Context>> for InferenceProvider {
-
     async fn predict(
-        &self, 
-        _ctx: Option<Context>, 
-        model_id: String, 
-        _tensor: Tensor
+        &self,
+        _ctx: Option<Context>,
+        model_id: String,
+        tensor_in: Tensor,
     ) -> anyhow::Result<Result<Tensor, MlError>> {
         info!("PREDICTING ... the future");
 
-        let out_tensor = Tensor {
-            shape: vec![],
-            dtype: DataType::F32,
-            data: vec![]
+        let models_lock = self.models.read().await;
+
+        let model_context = match models_lock.get(&model_id) {
+            Some(mc) => mc.to_owned(),
+            None => {
+                log::error!(
+                    "predict() - model {} not found in models={:?}",
+                    &model_id,
+                    &models_lock
+                );
+                return Ok(Err(MlError::ContextNotFoundError(format!(
+                    "Model '{}' is unknown",
+                    &model_id
+                ))));
+            }
         };
 
-        let models_lock = self.models.read().await;
-        let model_context = models_lock.get(&model_id).unwrap();
+        let engine = get_engine(Arc::clone(&self.engines), &model_context.graph_encoding).await?;
 
-        let _engine = get_engine(self.engines.clone(), model_context).await?;
+        let inference_result = tokio::task::spawn_blocking(move || async move {
+            if let Err(e) = engine
+                .set_input(model_context.graph_execution_context, 0, &tensor_in)
+                .await
+            {
+                log::error!(
+                    "predict() - inference engine failed in 'set_input()' with '{}'",
+                    e
+                );
+                return Err(MlError::ContextNotFoundError(e.to_string()));
+            }
 
-        Ok(Ok(out_tensor))
-   }
+            if let Err(e) = engine.compute(model_context.graph_execution_context).await {
+                log::error!("predict() - GraphExecutionContext not found: {}", e);
+                return Err(MlError::ContextNotFoundError(e.to_string()));
+            }
 
-    async fn prefetch(&self, _ctx: Option<Context>, model_id: String) -> anyhow::Result<Result<(),MlError>> {
+            let result = engine
+                .get_output(model_context.graph_execution_context, 0)
+                .await;
+
+            Ok(result)
+
+        })
+        .await
+        .map_err(|e| MlError::Internal(format!("internal join error: {}", e)))?
+        .await?;
+
+        if let Err(error) = inference_result {
+            log::error!("predict() - problem collecting results {}", error);
+            return Ok(Err(MlError::Internal(error.to_string())));
+        };
+
+        match inference_result {
+            Err(error) => {
+                log::error!("predict() - problem collecting results {}", error);
+                Ok(Err(MlError::Internal(error.to_string())))
+            }
+            Ok(tensor_out) => Ok(Ok(tensor_out)),
+        }
+    }
+
+    async fn prefetch(
+        &self,
+        _ctx: Option<Context>,
+        model_id: String,
+    ) -> anyhow::Result<Result<(), MlError>> {
         info!("prefetching model '{}'", model_id);
 
-        if let Err(error) = self.fetch_model(model_id).await {
-            return Err(MlError::Internal(format!("{}", error.to_string())).into());
-        };
+        let registry = self.get_registry().await;
 
-        // let config_guard = self.config.read().await;
+        let model_data = data_loader::fetch_model(&registry, &model_id)
+            .await
+            .map_err(|error| MlError::Internal(error.to_string()))?;
 
-        // let registry = match config_guard.values.get(CONFIG_URL_KEY) {
-        //     Some(url) => url,
-        //     None => DEFAULT_CONNECT_URL,
-        // };
-
-        // let oci_image = registry.to_owned() + "/" + &image_ref;
-
-        // info!("executing PREFETCH with registry '{}', model '{}' and image '{}'", registry, image_ref, &oci_image);
-
-        // let model_data = pull_model_and_metadata(&oci_image, MEDIA_TYPE).await.unwrap();
-
-        // info!("PREFETCHED - metadata '{:?}' and model of size '{}'", model_data.metadata, model_data.model.len());
-
-        // let mut models_lock = self.models.write().await;
-
-        // let is_model_already_loaded = models_lock.get(&oci_image);
-
-        // // Evaluate if the model defined by `oci_image` is already known.
-        // // If not, add it to the list of modules
-        // if is_model_already_loaded.is_some() {
-        //     warn!("PREFETCHED - model '{}' is already loaded", &oci_image);
-        // }
-
-        // if is_model_already_loaded.is_none() {
-        //     let mut default_context = ModelContext::default();
-        //     let model_context = default_context
-        //         .load_metadata(model_data.metadata);
-
-        //     match model_context {
-        //         Ok(mc) => models_lock.insert(oci_image.to_owned(), mc.clone()),
-
-        //         Err(error) => {
-        //             return Ok(Status::Error(MlError::InvalidMetadata(format!("Loading model's metadata from OCI image failed: {}", error))));
-        //         }
-        //     };
-        // }
+        self.register_model(&model_id, model_data).await?;
 
         Ok(Ok(()))
     }
 }
 
 impl Provider for InferenceProvider {
-        /// Initialize your provider with the given configuration. This is a good place to set up any state or
-        /// resources your provider needs to run.
-        async fn init(&self, config: impl ProviderInitConfig) -> anyhow::Result<()> {
+    /// Initialize your provider with the given configuration. This is a good place to set up any state or
+    /// resources your provider needs to run.
+    async fn init(&self, config: impl ProviderInitConfig) -> anyhow::Result<()> {
         let provider_id = config.get_provider_id();
         let initial_config = config.get_config();
 
@@ -215,11 +248,18 @@ impl Provider for InferenceProvider {
 
         let config_lock = self.config.read().await;
 
-        for (_, image_ref) in config_lock.values.iter().filter(|(k, _)| !k.starts_with("url")) {
-            let image_ref = image_ref.to_owned();
-            if let Err(error) = self.fetch_model(image_ref.to_owned()).await {
-                warn!("Unable to load model '{}': {}", &image_ref, error);
-            }
+        let registry = self.get_registry().await;
+
+        for (_, image_ref) in config_lock
+            .values
+            .iter()
+            .filter(|(k, _)| !k.starts_with("url"))
+        {
+            let model_data = data_loader::fetch_model(&registry, &image_ref)
+                .await
+                .map_err(|error| MlError::Internal(error.to_string()))?;
+
+            self.register_model(&image_ref, model_data).await?;
         }
 
         Ok(())
@@ -319,6 +359,4 @@ impl Provider for InferenceProvider {
     }
 }
 
-impl InferenceProvider {
-
-}
+impl InferenceProvider {}

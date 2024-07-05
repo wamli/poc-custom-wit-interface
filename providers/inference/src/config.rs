@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-// pub const MEDIA_TYPE: &str = "application/vnd.oci.image.layer.v1.tar+gzip";
-pub const MEDIA_TYPE: &str = "application/vnd.docker.image.rootfs.diff.tar.gzip";
-
 /// Default URL to use to connect to registry
 pub const DEFAULT_CONNECT_URL: &str = "localhost:5000";
 

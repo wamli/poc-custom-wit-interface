@@ -2,9 +2,9 @@ use super::*;
 
 use flate2::read::GzDecoder;
 use oci_distribution::{
-    client::{ClientConfig, ImageData},
-    secrets::RegistryAuth,
     Client, Reference,
+    secrets::RegistryAuth,
+    client::{ClientConfig, ImageData},
 };
 
 pub async fn pull_image(image_ref: &str, content_type: &str) -> DataLoaderResult<ImageData> {

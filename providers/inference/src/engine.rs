@@ -6,14 +6,14 @@ mod tract;
 #[cfg(any(feature = "tflite", feature = "edgetpu"))]
 pub use self::tflite::TfLiteEngine;
 
-use std::sync::Arc;
-use std::str::FromStr;
-use tokio::sync::RwLock;
-use async_trait::async_trait;
-use std::collections::HashMap;
+use crate::data_loader::DataLoaderError;
 use crate::engine::tract::TractEngine;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use crate:: data_loader::{DataLoaderError, ModelMetadata};
+use std::collections::HashMap;
+use std::str::FromStr;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[cfg(any(feature = "tflite", feature = "edgetpu"))]
 use crate::engine::tflite::TfLiteEngine;
@@ -34,6 +34,39 @@ pub type GraphExecutionContext = u32;
 pub type ModelId = String;
 pub type ModelZoo = HashMap<ModelId, ModelContext>;
 
+impl FromStr for DataType {
+    type Err = DataLoaderError;
+
+    fn from_str(dt: &str) -> Result<Self, Self::Err> {
+        match dt.to_lowercase().as_str() {
+            "u8" => Ok(DataType::U8),
+            "u16" => Ok(DataType::U16),
+            "u32" => Ok(DataType::U32),
+            "u64" => Ok(DataType::U64),
+            "u128" => Ok(DataType::U128),
+            "s8" => Ok(DataType::S8),
+            "s16" => Ok(DataType::S16),
+            "s32" => Ok(DataType::S32),
+            "s64" => Ok(DataType::S64),
+            "s128" => Ok(DataType::S128),
+            "f16" => Ok(DataType::F16),
+            "f32" => Ok(DataType::F32),
+            "f64" => Ok(DataType::F64),
+            "f128" => Ok(DataType::F128),
+            "na" => Ok(DataType::Na),
+
+            _ => {
+                log::warn!(
+                    "invalid or missing data type detected: '{}' - defaults to 'f32'",
+                    dt,
+                );
+
+                Ok(DataType::F32)
+            },
+        }
+    }
+}
+
 /// GraphEncoding
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -43,6 +76,23 @@ pub enum GraphEncoding {
     TfLite,
     OpenVino,
     Tensorflow,
+}
+
+impl FromStr for GraphEncoding {
+    type Err = DataLoaderError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "onnx" => Ok(GraphEncoding::Onnx),
+            "tflite" => Ok(GraphEncoding::TfLite),
+            "openvino" => Ok(GraphEncoding::OpenVino),
+            "tensorflow" => Ok(GraphEncoding::Tensorflow),
+            _ => Err(DataLoaderError::ModelLoaderMetadataError(format!(
+                "Invalid graph encoding: '{}'",
+                s
+            ))),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Hash)]
@@ -61,6 +111,27 @@ pub enum ExecutionTarget {
     Gpu,
     Npu,
     Tpu,
+}
+
+impl FromStr for ExecutionTarget {
+    type Err = DataLoaderError;
+
+    fn from_str(et: &str) -> Result<Self, Self::Err> {
+        match et.to_lowercase().as_str() {
+            "cpu" => Ok(ExecutionTarget::Cpu),
+            "tpu" => Ok(ExecutionTarget::Tpu),
+            "gpu" => Ok(ExecutionTarget::Gpu),
+            "npu" => Ok(ExecutionTarget::Npu),
+            _ => {
+                log::warn!(
+                    "invalid or missing execution target detected: '{}' - defaults to cpu",
+                    et,
+                );
+
+                Ok(ExecutionTarget::Cpu)
+            },
+        }
+    }
 }
 
 // #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -86,51 +157,17 @@ impl ModelContext {
         }
     }
 
-    /// load metadata
-    pub fn load_metadata(
-        &mut self,
-        metadata: ModelMetadata,
-    ) -> Result<&ModelContext, DataLoaderError> {
-        self.model_name = metadata.model_name;
-        self.graph_encoding = GraphEncoding::Onnx;
-        self.execution_target = ExecutionTarget::Cpu;
+    // /// load metadata
+    // pub fn load_metadata(
+    //     &mut self,
+    //     metadata: ModelMetadata,
+    // ) -> Result<&ModelContext, DataLoaderError> {
+    //     self.model_name = metadata.model_name;
+    //     self.graph_encoding = GraphEncoding::Onnx;
+    //     self.execution_target = ExecutionTarget::Cpu;
 
-        Ok(self)
-    }
-}
-
-impl FromStr for GraphEncoding {
-    type Err = DataLoaderError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "onnx" => Ok(GraphEncoding::Onnx),
-            "tflite" => Ok(GraphEncoding::TfLite),
-            "openvino" => Ok(GraphEncoding::OpenVino),
-            "tensorflow" => Ok(GraphEncoding::Tensorflow),
-            _ => Err(DataLoaderError::ModelLoaderMetadataError(format!(
-                "Invalid graph encoding: '{}'",
-                s
-            ))),
-        }
-    }
-}
-
-impl FromStr for ExecutionTarget {
-    type Err = DataLoaderError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "cpu" => Ok(ExecutionTarget::Cpu),
-            "tpu" => Ok(ExecutionTarget::Tpu),
-            "gpu" => Ok(ExecutionTarget::Gpu),
-            "npu" => Ok(ExecutionTarget::Npu),
-            _ => Err(DataLoaderError::ModelLoaderMetadataError(format!(
-                "Invalid execution target: '{}'",
-                s
-            ))),
-        }
-    }
+    //     Ok(self)
+    // }
 }
 
 /// InferenceEngine
@@ -172,22 +209,21 @@ pub trait InferenceEngine {
 //     }
 // }
 
-
 pub async fn get_engine(
-    engines: Arc<RwLock<HashMap<InferenceFramework, Engine>>>, 
-    context: &ModelContext
+    engines: Arc<RwLock<HashMap<InferenceFramework, Engine>>>,
+    encoding: &GraphEncoding,
 ) -> InferenceResult<Engine> {
     let engines_lock = engines.write().await;
 
-    log::debug!("get_engine() - context: {:?}", &context);
+    log::debug!("get_engine() - context: {:?}", &encoding);
 
-    match context.graph_encoding {
+    match encoding {
         GraphEncoding::Onnx | GraphEncoding::Tensorflow => {
             match engines_lock.get(&InferenceFramework::Tract) {
                 Some(e) => Ok(e.clone()),
                 None => Err(InferenceError::InvalidEncodingError),
             }
-        },
+        }
 
         #[cfg(any(feature = "tflite", feature = "edgetpu"))]
         GraphEncoding::TfLite => match engines_lock.get(&InferenceFramework::TfLite) {
@@ -198,107 +234,99 @@ pub async fn get_engine(
         _ => {
             log::error!(
                 "get_engine() - unsupported graph encoding detected '{:?}'",
-                &context.graph_encoding
+                &encoding
             );
             Err(InferenceError::InvalidEncodingError)
         }
     }
 }
 
-    /// Each link definition may address a different target
-    /// such that it may be necessary to support multiple engines.
-    pub async fn get_or_else_set_engine(
-        engines: Arc<RwLock<HashMap<InferenceFramework, Engine>>>,
-        context: &ModelContext,
-    ) -> InferenceResult<Engine> {
-        let mut engines_lock = engines.write().await;
+/// Each link definition may address a different target
+/// such that it may be necessary to support multiple engines.
+pub async fn get_or_else_set_engine(
+    engines: Arc<RwLock<HashMap<InferenceFramework, Engine>>>,
+    encoding: &GraphEncoding,
+) -> InferenceResult<Engine> {
+    let mut engines_lock = engines.write().await;
 
-        match context.graph_encoding {
-            GraphEncoding::Onnx | GraphEncoding::Tensorflow => {
-                match engines_lock.get(&InferenceFramework::Tract) {
-                    Some(e) => {
-                        log::debug!("get_or_else_set_engine() - previously created Onnx/Tensorflow engine selected for '{}'.", context.model_name);
-                        Ok(e.clone())
-                    }
-                    None => {
-                        let feedback = engines_lock.insert(
-                            InferenceFramework::Tract,
-                            Arc::new(Box::new(TractEngine::default())),
-                        );
-                        log::debug!("get_or_else_set_engine() - Onnx/Tensorflow engine selected and created for '{}'.", context.model_name);
-
-                        if feedback.is_none() {
-                            log::debug!(
-                                "get_or_else_set_engine() - Onnx/Tensorflow was definitely created"
-                            );
-                        } else {
-                            log::debug!(
-                                "get_or_else_set_engine() - Onnx/Tensorflow was NOT created!"
-                            );
-                        }
-
-                        log::debug!(
-                            "get_or_else_set_engine() - content of Engines: {:?}: with length {:?}",
-                            &engines_lock.keys(),
-                            &engines_lock.keys().len()
-                        );
-
-                        //assert_eq!(engines_lock.is_empty(), false);
-
-                        Ok(engines_lock
-                            .get(&InferenceFramework::Tract)
-                            .unwrap()
-                            .clone())
-                    }
+    match encoding {
+        GraphEncoding::Onnx | GraphEncoding::Tensorflow => {
+            match engines_lock.get(&InferenceFramework::Tract) {
+                Some(e) => {
+                    log::debug!("get_or_else_set_engine() - previously created Onnx/Tensorflow engine selected for '{:?}'.", &encoding);
+                    Ok(e.clone())
                 }
-            }
+                None => {
+                    let feedback = engines_lock.insert(
+                        InferenceFramework::Tract,
+                        Arc::new(Box::new(TractEngine::default())),
+                    );
+                    log::debug!("get_or_else_set_engine() - Onnx/Tensorflow engine selected and created for '{:?}'.", &encoding);
 
-            #[cfg(any(feature = "tflite", feature = "edgetpu"))]
-            GraphEncoding::TfLite => {
-                match engines_lock.get(&InferenceFramework::TfLite) {
-                    Some(e) => {
-                        log::debug!("get_or_else_set_engine() - previously created TfLite engine selected for '{}'.", context.model_name);
-                        Ok(e.clone())
-                    }
-                    None => {
-                        let feedback = engines_lock.insert(
-                            InferenceFramework::TfLite,
-                            Arc::new(Box::new(TfLiteEngine::default())),
-                        );
-                        log::debug!("get_or_else_set_engine() - TfLite engine selected and created for '{}'.", context.model_name);
-
-                        if feedback.is_none() {
-                            log::debug!(
-                                "get_or_else_set_engine() - TfLite engine was definitely created"
-                            );
-                        } else {
-                            log::debug!("get_or_else_set_engine() - TfLite was NOT created!");
-                        }
-
+                    if feedback.is_none() {
                         log::debug!(
-                            "get_or_else_set_engine() - content of Engines: {:?}: with length {:?}",
-                            &engines_lock.keys(),
-                            &engines_lock.keys().len()
+                            "get_or_else_set_engine() - Onnx/Tensorflow was definitely created"
                         );
-
-                        Ok(engines_lock
-                            .get(&InferenceFramework::TfLite)
-                            .unwrap()
-                            .clone())
+                    } else {
+                        log::debug!("get_or_else_set_engine() - Onnx/Tensorflow was NOT created!");
                     }
+
+                    log::debug!(
+                        "get_or_else_set_engine() - content of Engines: {:?}: with length {:?}",
+                        &engines_lock.keys(),
+                        &engines_lock.keys().len()
+                    );
+
+                    //assert_eq!(engines_lock.is_empty(), false);
+
+                    Ok(engines_lock
+                        .get(&InferenceFramework::Tract)
+                        .unwrap()
+                        .clone())
                 }
-            }
-            _ => {
-                log::error!(
-                    "unsupported graph encoding detected '{:?}'",
-                    &context.graph_encoding
-                );
-                Err(InferenceError::InvalidEncodingError)
             }
         }
+
+        #[cfg(any(feature = "tflite", feature = "edgetpu"))]
+        GraphEncoding::TfLite => match engines_lock.get(&InferenceFramework::TfLite) {
+            Some(e) => {
+                log::debug!("get_or_else_set_engine() - previously created TfLite engine selected for '{}'.", encoding.model_name);
+                Ok(e.clone())
+            }
+            None => {
+                let feedback = engines_lock.insert(
+                    InferenceFramework::TfLite,
+                    Arc::new(Box::new(TfLiteEngine::default())),
+                );
+                log::debug!(
+                    "get_or_else_set_engine() - TfLite engine selected and created for '{}'.",
+                    encoding.model_name
+                );
+
+                if feedback.is_none() {
+                    log::debug!("get_or_else_set_engine() - TfLite engine was definitely created");
+                } else {
+                    log::debug!("get_or_else_set_engine() - TfLite was NOT created!");
+                }
+
+                log::debug!(
+                    "get_or_else_set_engine() - content of Engines: {:?}: with length {:?}",
+                    &engines_lock.keys(),
+                    &engines_lock.keys().len()
+                );
+
+                Ok(engines_lock
+                    .get(&InferenceFramework::TfLite)
+                    .unwrap()
+                    .clone())
+            }
+        },
+        _ => {
+            log::error!("unsupported graph encoding detected '{:?}'", &encoding);
+            Err(InferenceError::InvalidEncodingError)
+        }
     }
-
-
+}
 
 /// InferenceResult
 pub type InferenceResult<T> = Result<T, InferenceError>;
@@ -340,9 +368,6 @@ pub enum InferenceError {
 
     #[error("Re-shaping of tensor failed {0}")]
     ReShapeError(String),
-
-    // #[error("Model reshape failed")]
-    // ShapeError(#[from] ndarray::ShapeError),
 
     #[error("Bytes to f32 vec conversion failed")]
     BytesToVecConversionError(#[from] std::io::Error),
