@@ -22,5 +22,8 @@ Experimental for now, just returning an echo. Some example API calls,
 requires [NATS-cli](https://github.com/nats-io/natscli) to be installed 
 
 ```bash
-nats req "wasmcloud.echo" "HELLLLOOOOOO
+nats req "wasmcloud.echo" "HELLLLOOOOOO"
+
+# Sending a file
+nats req "wasmcloud.echo" "$(cat ../data/imagenet/cat.jpg)"
 ```

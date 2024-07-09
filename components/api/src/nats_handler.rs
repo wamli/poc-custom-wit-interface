@@ -8,6 +8,9 @@ use crate::Api;
 impl NatsGuest for Api {
     fn handle_message(msg: types::BrokerMessage) -> Result<(), String> {
         if let Some(reply_to) = msg.reply_to {
+            let body_size = msg.body.len();
+            log(Level::Info, "Api", &format!("--------> Read NATS request body with length: {:?}", body_size));
+
             consumer::publish(&types::BrokerMessage {
                 subject: reply_to,
                 reply_to: None,
