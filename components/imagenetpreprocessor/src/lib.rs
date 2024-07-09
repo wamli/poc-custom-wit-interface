@@ -80,11 +80,11 @@ impl Guest for ImagenetPreProcessor {
             &format!("leaving preprocess(), returning tensor of length {}", tensor_length),
         );
 
-        // let tensor_out = Tensor {
-        //     shape: vec![],
-        //     dtype: DataType::F32,
-        //     data: vec![]
-        // };
+        let tensor_out = Tensor {
+            shape: vec![1],
+            dtype: DataType::F32,
+            data: vec![1, 2, 3, 4, 5, 6, 7, 8, 9]
+        };
 
         Ok(tensor_out)
     }

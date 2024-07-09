@@ -24,6 +24,10 @@ REMOTE_HTTPSERVER=$REMOTE_REG_SERVER/$HTTPSERVER
 # HTTP_PROVIDER_FILE=$EXEC_PATH/../images/httpserver.par.gz
 HTTP_PROVIDER_FILE=$EXEC_PATH/../images/http-server.par.gz
 
+NATS_PROVIDER=messaging-nats:canary
+REMOTE_NATS_SERVER=$REMOTE_REG_SERVER/$NATS_PROVIDER
+NATS_PROVIDER_FILE=$EXEC_PATH/../images/messaging-nats.par.gz
+
 INFERENCE=inference:0.1.0
 INFERENCE_PROVIDER_FILE=$EXEC_PATH/../providers/inference/build/inference.par.gz
 
@@ -160,6 +164,7 @@ stop_local_registry
 start_local_registry
 
 push_artefact $HTTPSERVER $HTTP_PROVIDER_FILE
+push_artefact $NATS_PROVIDER $NATS_PROVIDER_FILE
 push_artefact $IMAGENET_PREPROCESSOR_ACTOR $IMAGENET_PREPROCESSOR_ACTOR_FILE
 push_artefact $POSTPROCESSOR_ACTOR $POSTPROCESSOR_ACTOR_FILE
 push_artefact $API_ACTOR $API_ACTOR_FILE
