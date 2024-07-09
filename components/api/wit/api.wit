@@ -5,6 +5,7 @@ world api {
   import wasi:logging/logging;
   import wamli:ml/inference;
   import wamli:ml/conversion;
+  import wamli:ml/classification;
 
   export wasi:http/incoming-handler@0.2.0;
 }

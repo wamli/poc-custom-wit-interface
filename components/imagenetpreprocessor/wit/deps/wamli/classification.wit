@@ -2,6 +2,7 @@ interface classification {
    use types.{
       tensor,
       ml-error,
+      classification,
       classifications,
    };
 

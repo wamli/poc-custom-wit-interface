@@ -5,6 +5,6 @@
 
 wash app list
 
-wash app delete model-on-demand v0.1.0
+wash app delete ml-inference v0.1.0
 
 wash app list

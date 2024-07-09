@@ -1,3 +1,5 @@
+use ndarray::Data;
+
 use crate::processor::preprocess;
 use crate::wamli::ml::types::Tensor;
 use crate::wamli::ml::types::MlError;
@@ -8,11 +10,12 @@ mod processor;
 
 wit_bindgen::generate!();
 
+const BATCH: u32 = 1;
 const CHANNELS: u32 = 3;
 const HEIGHT: u32 = 224;
 const WIDTH: u32 = 224;
 
-const SHAPE: [u32;3] = [CHANNELS, HEIGHT, WIDTH];
+const SHAPE: [u32;4] = [BATCH, CHANNELS, HEIGHT, WIDTH];
 const DTYPE: DataType = DataType::F32;
 
 const WRONG_TENSOR_SHAPE: &str = "Expecting tensors of shape [1, 3, 224, 224]";
@@ -50,6 +53,12 @@ impl Guest for ImagenetPreProcessor {
             return Err(MlError::Internal(WRONG_TENSOR_SHAPE.to_string()));
         }
 
+        log(
+            Level::Info,
+            "ImagenetPreProcessor",
+            "going to enter preprocess()",
+        );
+
         let converted_tensor_data = match preprocess(&tensor_data, CHANNELS, HEIGHT, WIDTH) {
             Ok(t)      => t,
             Err(error) => {
@@ -57,11 +66,25 @@ impl Guest for ImagenetPreProcessor {
             }
         };
 
+        let tensor_length = converted_tensor_data.len();
+
         let tensor_out = Tensor {
             shape: vec![1, CHANNELS, HEIGHT, WIDTH],
             dtype: DataType::F32,
             data: converted_tensor_data,
         };
+
+        log(
+            Level::Info,
+            "ImagenetPreProcessor",
+            &format!("leaving preprocess(), returning tensor of length {}", tensor_length),
+        );
+
+        // let tensor_out = Tensor {
+        //     shape: vec![],
+        //     dtype: DataType::F32,
+        //     data: vec![]
+        // };
 
         Ok(tensor_out)
     }

@@ -19,7 +19,7 @@ pub fn f32_array_to_bytes(values: &[f32]) -> Vec<u8> {
 // pub async fn preprocess(raw_data: &[u8], channels: u32, height: u32, width: u32) -> ImageResult<Vec<u8>> {
 pub fn preprocess(raw_data: &[u8], channels: u32, height: u32, width: u32) -> ImageResult<Vec<u8>> {
     log(
-        Level::Debug,
+        Level::Info,
         "ImagenetPreProcessor",
         "preprocess() - entry point",
     );
@@ -35,7 +35,7 @@ pub fn preprocess(raw_data: &[u8], channels: u32, height: u32, width: u32) -> Im
     );
 
     log(
-        Level::Debug,
+        Level::Info,
         "ImagenetPreProcessor",
         &format!("resized image: {:#?}", image.dimensions()),
     );

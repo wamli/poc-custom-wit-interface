@@ -1,17 +1,17 @@
 apiVersion: core.oam.dev/v1beta1
 kind: Application
 metadata:
-  name: model-on-demand
+  name: ml-inference
   annotations:
     version: v0.1.0
-    description: "Model on demand"
+    description: "Machine learning inference"
     # experimental: true
 spec:
   components:
     - name: api
       type: component
       properties:
-        image: file://actors/api/build/api_s.wasm
+        image: file://components/api/build/api_s.wasm
         id: api
       traits:
         - type: spreadscaler
@@ -25,34 +25,34 @@ spec:
             interfaces: [inference]
         - type: link
           properties:
-            name: preprocessor01
-            target: preprocessor
+            name: imagenetpreprocessor
+            target: imagenetpreprocessor
             namespace: wamli
             package: ml
             interfaces: [conversion]
         - type: link
           properties:
-            name: postprocessor01
-            target: postprocessor
+            name: imagenetpostprocessor
+            target: imagenetpostprocessor
             namespace: wamli
             package: ml
-            interfaces: [conversion]
+            interfaces: [classification]
     
-    - name: preprocessor
+    - name: imagenetpreprocessor
       type: component
       properties:
-        image: file://actors/preprocessor/build/preprocessor_s.wasm
-        id: preprocessor
+        image: file://components/imagenetpreprocessor/build/imagenetpreprocessor_s.wasm
+        id: imagenetpreprocessor
       traits:
         - type: spreadscaler
           properties:
             replicas: 1
 
-    - name: postprocessor
+    - name: imagenetpostprocessor
       type: component
       properties:
-        image: file://actors/postprocessor/build/postprocessor_s.wasm
-        id: postprocessor
+        image: file://components/imagenetpostprocessor/build/imagenetpostprocessor_s.wasm
+        id: imagenetpostprocessor
       traits:
         - type: spreadscaler
           properties:

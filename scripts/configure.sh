@@ -32,16 +32,16 @@ INFERENCE_PROVIDER_FILE=$EXEC_PATH/../providers/inference/build/inference.par.gz
 ##
 
 API_ACTOR=api:0.1.0
-API_ACTOR_FILE=$EXEC_PATH/../actors/api/build/api_s.wasm
+API_ACTOR_FILE=$EXEC_PATH/../components/api/build/api_s.wasm
 
-PREPROCESSOR_ACTOR=preprocessor:0.1.0
-PREPROCESSOR_ACTOR_FILE=$EXEC_PATH/../actors/preprocessor/build/preprocessor_s.wasm
+IMAGENET_PREPROCESSOR_ACTOR=imagenetpreprocessor:0.1.0
+IMAGENET_PREPROCESSOR_ACTOR_FILE=$EXEC_PATH/../components/imagenetpreprocessor/build/imagenetpreprocessor_s.wasm
 
-POSTPROCESSOR_ACTOR=postprocessor:0.1.0
-POSTPROCESSOR_ACTOR_FILE=$EXEC_PATH/../actors/postprocessor/build/postprocessor_s.wasm
+POSTPROCESSOR_ACTOR=imagenetpostprocessor:0.1.0
+POSTPROCESSOR_ACTOR_FILE=$EXEC_PATH/../components/imagenetpostprocessor/build/imagenetpostprocessor_s.wasm
 
 SQUEEZENET_MODEL_ACTOR=squeezenet_model:0.1.0
-SQUEEZENET_MODEL_ACTOR_FILE=$EXEC_PATH/../actors/model/build/model_s.wasm
+SQUEEZENET_MODEL_ACTOR_FILE=$EXEC_PATH/../components/model/build/model_s.wasm
 
 ##
 #   AI MODELS
@@ -160,7 +160,7 @@ stop_local_registry
 start_local_registry
 
 push_artefact $HTTPSERVER $HTTP_PROVIDER_FILE
-push_artefact $PREPROCESSOR_ACTOR $PREPROCESSOR_ACTOR_FILE
+push_artefact $IMAGENET_PREPROCESSOR_ACTOR $IMAGENET_PREPROCESSOR_ACTOR_FILE
 push_artefact $POSTPROCESSOR_ACTOR $POSTPROCESSOR_ACTOR_FILE
 push_artefact $API_ACTOR $API_ACTOR_FILE
 push_artefact $INFERENCE $INFERENCE_PROVIDER_FILE

@@ -9,7 +9,9 @@ use wamli::ml::inference::prefetch;
 use crate::wasi::logging::logging::*;
 use crate::wamli::ml::inference::predict;
 use exports::wasi::http::incoming_handler::Guest;
-use crate::wamli::ml::conversion::{Tensor, DataType};
+use crate::wamli::ml::conversion::convert;
+use crate::wamli::ml::types::{Tensor, DataType, MlError};
+use crate::wamli::ml::classification::classify;
 
 
 type Result<T> = std::result::Result<T, Error>;
@@ -20,6 +22,9 @@ const VALUE_TYPE_PARAM_NAME: &str = "value_type";
 // [1, 3, 244, 244] which is a typical ImageNet dimension
 const DEFAULT_DIMENIONS: &str = "%5B1%2C3%2C224%2C224%5D"; 
 const DEFAULT_VALUE_TYPE: &str = "NA";
+
+const PREPROCESSOR:  &str = "imagenetpreprocessor";
+const POSTPROCESSOR: &str = "imagenetpostprocessor";
 
 struct Api;
 
@@ -37,17 +42,24 @@ impl Error {
         }
     }
 
-    fn body_deserialization_error(e: Error) -> Self {
-        Error {
-            status_code: StatusCode::BAD_REQUEST,
-            message: format!("Error deserializing request body to tensor: {:?}", e),
-        }
-    }
+    // fn body_deserialization_error(e: Error) -> Self {
+    //     Error {
+    //         status_code: StatusCode::BAD_REQUEST,
+    //         message: format!("Error deserializing request body to tensor: {:?}", e),
+    //     }
+    // }
 
     fn bad_request_parameter_value_type(e: Error) -> Self {
         Error {
             status_code: StatusCode::BAD_REQUEST,
             message: format!("Invalid value-type detected in request: {:?}", e),
+        }
+    }
+
+    fn internal_server_error(e: MlError) -> Self {
+        Error {
+            status_code: StatusCode::INTERNAL_SERVER_ERROR,
+            message: format!("Internal server error: {:?}", e),
         }
     }
 
@@ -141,6 +153,145 @@ impl Guest for Api {
 
             (Method::Put, [model_id]) => {
                 log(Level::Info, "Api", &format!("--------> API: executing WITH PRE- AND POST-PROCESSING, with model_id: '{:?}' ", model_id));
+
+                let body = match parse_request_body(req) {
+                    Ok(b) => {
+                        log(Level::Info, "Api", &format!("--------> Read http request body into buffer - total length: {:?}", b.len()));
+                        b
+                    },
+
+                    Err(error) => {
+                        send_response_error(
+                            response_out,
+                            error,
+                        );
+                        return;
+                    }
+                };
+
+                let tensor = Tensor {
+                    shape: vec![1, 3, 224, 224],
+                    dtype: DataType::F32,
+                    data: body,
+                };
+
+                // // https://wasmcloud.slack.com/archives/CS38R7N9Y/p1719256911613509?thread_ts=1718986484.246259&cid=CS38R7N9Y
+                // let interface1 = wasmcloud::bus::lattice::CallTargetInterface::new(
+                //     "wamli",
+                //     "ml",
+                //     "conversion",
+                // );
+                
+                // wasmcloud::bus::lattice::set_link_name(PREPROCESSOR, vec![interface1]);
+                
+                let converted = match convert(&tensor, None, None) {
+                    Ok(t) => t,
+                    Err(error) => {
+                        send_response_error(
+                            response_out,
+                            Error::internal_server_error(error),
+                        );
+                        return;
+                    },
+                };
+                
+                log(Level::Info, "Api", &format!("--------> CONVERSION received from PRE-processor: {:?}", converted));
+
+                let prediction = match predict(model_id, &tensor) {
+                    Ok(t) => t,
+                    Err(error) => {
+                        send_response_error(
+                            response_out,
+                            Error::internal_server_error(error),
+                        );
+                        return;
+                    },
+                };
+
+                log(Level::Info, "", &format!("-------> PREDICTION received: {:?}", prediction));
+
+                // let interface2 = wasmcloud::bus::lattice::CallTargetInterface::new(
+                //     "wamli",
+                //     "ml",
+                //     "conversion",
+                // );
+
+                // wasmcloud::bus::lattice::set_link_name(POSTPROCESSOR, vec![interface2]);
+                // let converted = match convert(&prediction, None, None) {
+                //     Ok(t) => t,
+                //     Err(error) => {
+                //         send_response_error(
+                //             response_out,
+                //             Error::internal_server_error(error),
+                //         );
+                //         return;
+                //     },
+                // };
+
+                let classifications = match classify(&prediction) {
+                    Ok(classifications) => classifications,
+                    Err(error) => {
+                        send_response_error(
+                            response_out,
+                            Error::internal_server_error(error),
+                        );
+                        return;
+                    },
+                };
+
+                log(Level::Info, "Api", &format!("--------> CONVERSION received from POST-processor: {:?}", &classifications));
+
+
+                send_positive_resonse(response_out, &format!("{:?}", classifications));
+                return;
+            },
+
+            (Method::Put, ["preprocessing-only", model_id]) => {
+                log(Level::Info, "Api", &format!("--------> API: PREPROCESSING ONLY with model_id: '{:?}' ", model_id));
+
+                let body = match parse_request_body(req) {
+                    Ok(b) => {
+                        log(Level::Info, "Api", &format!("--------> Read http request body into buffer - total length: {:?}", b.len()));
+                        b
+                    },
+
+                    Err(error) => {
+                        send_response_error(
+                            response_out,
+                            error,
+                        );
+                        return;
+                    }
+                };
+
+                let tensor = Tensor {
+                    shape: vec![1, 3, 224, 224],
+                    dtype: DataType::F32,
+                    data: body,
+                };
+
+                // https://wasmcloud.slack.com/archives/CS38R7N9Y/p1719256911613509?thread_ts=1718986484.246259&cid=CS38R7N9Y
+                let interface1 = wasmcloud::bus::lattice::CallTargetInterface::new(
+                    "wamli",
+                    "ml",
+                    "conversion",
+                );
+                
+                wasmcloud::bus::lattice::set_link_name(PREPROCESSOR, vec![interface1]);
+                
+                let converted = match convert(&tensor, None, None) {
+                    Ok(t) => t,
+                    Err(error) => {
+                        log(Level::Info, "Api", &format!("--------> CONVERSION received from PRE-processor went WRONG"));
+                        send_response_error(
+                            response_out,
+                            Error::internal_server_error(error),
+                        );
+                        return;
+                    },
+                };
+                
+                log(Level::Info, "Api", &format!("--------> CONVERSION received from PRE-processor: {:?}", converted));
 
                 send_positive_resonse(response_out, "HAPPY TO SEE YOU WENT DOWN THE LUCKY PATH!");
                 return;
@@ -300,23 +451,23 @@ fn send_response_error(response_out: ResponseOutparam, error: Error) {
     ResponseOutparam::set(response_out, Ok(response));
 }
 
-fn get_body(request: IncomingRequest, response_out: ResponseOutparam) -> Vec<u8> {
-    match parse_request_body(request) {
-        Ok(b) => {
-            log(Level::Info, "Api", &format!("--------> Read http request body into buffer - total length: {:?}", b.len()));
-            b
-        },
+// fn get_body(request: IncomingRequest, response_out: ResponseOutparam) -> Vec<u8> {
+//     match parse_request_body(request) {
+//         Ok(b) => {
+//             log(Level::Info, "Api", &format!("--------> Read http request body into buffer - total length: {:?}", b.len()));
+//             b
+//         },
 
-        Err(error) => {
-            log(Level::Error, "Api", &format!("Failed to deserialize the input tensor from body: {:?}", error));
-            send_response_error(
-                response_out,
-                error,
-            );
-            return vec![];
-        }
-    }
-}
+//         Err(error) => {
+//             log(Level::Error, "Api", &format!("Failed to deserialize the input tensor from body: {:?}", error));
+//             send_response_error(
+//                 response_out,
+//                 error,
+//             );
+//             return vec![];
+//         }
+//     }
+// }
 
 fn parse_request_body(request: IncomingRequest) -> Result<Vec<u8>> {
     let body = match request.consume() {
