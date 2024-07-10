@@ -9,7 +9,7 @@ use crate::Api;
 use crate::HttpGuest;
 
 use crate::wasmcloud::bus::lattice::{CallTargetInterface, set_link_name};
-use crate::errors::{Result, Error, send_positive_resonse, send_response_error};
+use crate::errors::{Result, Error, send_positive_response, send_response_error};
 
 use crate::{
     wasi::http::types::*,
@@ -107,7 +107,7 @@ impl HttpGuest for Api {
 
                 log(Level::Info, "Api", &format!("--------> API: PREFETCH result: '{:?}' ", prefetch_result));
                 
-                send_positive_resonse(response_out, &format!("Feedback from inference provider: {:?}", prefetch_result));
+                send_positive_response(response_out, &format!("Feedback from inference provider: {:?}", prefetch_result));
                 return;
             },
 
@@ -202,7 +202,7 @@ impl HttpGuest for Api {
                 log(Level::Info, "Api", &format!("--------> CONVERSION received from POST-processor: {:?}", &classifications));
 
 
-                send_positive_resonse(response_out, &format!("{:?}", classifications));
+                send_positive_response(response_out, &format!("{:?}", classifications));
                 return;
             },
 
@@ -253,14 +253,14 @@ impl HttpGuest for Api {
                 
                 log(Level::Info, "Api", &format!("--------> CONVERSION received from PRE-processor: {:?}", converted));
 
-                send_positive_resonse(response_out, "HAPPY TO SEE YOU WENT DOWN THE LUCKY PATH!");
+                send_positive_response(response_out, "HAPPY TO SEE YOU WENT DOWN THE LUCKY PATH!");
                 return;
             },
 
             (Method::Put, ["no-preprocessing", model_id]) => {
                 log(Level::Info, "Api", &format!("--------> API: executing NO-PREPROCESSING with model_id: '{:?}' ", model_id));
 
-                send_positive_resonse(response_out, "HAPPY TO SEE YOU WENT DOWN THE LUCKY PATH!");
+                send_positive_response(response_out, "HAPPY TO SEE YOU WENT DOWN THE LUCKY PATH!");
                 return;
             },
 
@@ -350,7 +350,7 @@ impl HttpGuest for Api {
         // let converted = convert(&conversion_request);
         // log(Level::Info, "Api", &format!("--------> CONVERSION received from POST-processor: {:?}", converted));
 
-        send_positive_resonse(response_out, "HAPPY TO SEE YOU WENT DOWN THE LUCKY PATH!");
+        send_positive_response(response_out, "HAPPY TO SEE YOU WENT DOWN THE LUCKY PATH!");
     }
 }
 

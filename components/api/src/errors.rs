@@ -54,15 +54,15 @@ impl Error {
     }
 }
 
-pub fn send_positive_resonse(response_out: ResponseOutparam, content: &str) {
+pub fn send_positive_response(response_out: ResponseOutparam, content: &str) {
     let response = OutgoingResponse::new(Fields::new());
-    response
-        .set_status_code(200)
-        .expect("Unable to set status code");
+    response.set_status_code(200).expect("Unable to set status code");
     
     let response_body = response.body().expect("body called more than once");
-    let mut writer = response_body.write().expect("should only call write once");
 
+    ResponseOutparam::set(response_out, Ok(response));
+
+    let mut writer = response_body.write().expect("should only call write once");
     let mut stream = OutputStreamWriter::from(&mut writer);
 
     if let Err(e) = stream.write_all(content.as_bytes()) {
@@ -76,8 +76,6 @@ pub fn send_positive_resonse(response_out: ResponseOutparam, content: &str) {
     // Make sure to release the write resources
     drop(writer);
     OutgoingBody::finish(response_body, None).expect("failed to finish response body");
-    
-    ResponseOutparam::set(response_out, Ok(response));
 }
 
 pub fn send_response_error(response_out: ResponseOutparam, error: Error) {
@@ -88,8 +86,10 @@ pub fn send_response_error(response_out: ResponseOutparam, error: Error) {
         .set_status_code(error.status_code.as_u16())
         .expect("Unable to set status code");
     let response_body: OutgoingBody = response.body().expect("body called more than once");
-    let mut writer = response_body.write().expect("should only call write once");
 
+    ResponseOutparam::set(response_out, Ok(response));
+
+    let mut writer = response_body.write().expect("should only call write once");
     let mut stream = OutputStreamWriter::from(&mut writer);
 
     if let Err(e) = stream.write_all(error.message.as_bytes()) {
@@ -103,8 +103,6 @@ pub fn send_response_error(response_out: ResponseOutparam, error: Error) {
     // Make sure to release the write resources
     drop(writer);
     OutgoingBody::finish(response_body, None).expect("failed to finish response body");
-    
-    ResponseOutparam::set(response_out, Ok(response));
 }
 
 // fn get_body(request: IncomingRequest, response_out: ResponseOutparam) -> Vec<u8> {
