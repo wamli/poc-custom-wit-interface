@@ -1,5 +1,7 @@
 # Proof of concept (POC)
 
+![application](docs/images/application.png)
+
 The application has two endpoints
 * http
 * nats

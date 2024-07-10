@@ -135,14 +135,14 @@ impl HttpGuest for Api {
                     data: body,
                 };
 
-                // // https://wasmcloud.slack.com/archives/CS38R7N9Y/p1719256911613509?thread_ts=1718986484.246259&cid=CS38R7N9Y
-                // let interface1 = wasmcloud::bus::lattice::CallTargetInterface::new(
-                //     "wamli",
-                //     "ml",
-                //     "conversion",
-                // );
+                // https://wasmcloud.slack.com/archives/CS38R7N9Y/p1719256911613509?thread_ts=1718986484.246259&cid=CS38R7N9Y
+                let interface1 = CallTargetInterface::new(
+                    "wamli",
+                    "ml",
+                    "conversion",
+                );
                 
-                // wasmcloud::bus::lattice::set_link_name(PREPROCESSOR, vec![interface1]);
+                set_link_name(PREPROCESSOR, vec![interface1]);
                 
                 let converted = match convert(&tensor, None, None) {
                     Ok(t) => t,
