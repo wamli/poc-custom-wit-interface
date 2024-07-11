@@ -1,12 +1,17 @@
-# Proof of concept (POC)
+# Inference application based on WIT components
+
+## Architecture
 
 ![application](docs/images/application.png)
 
-The application has two endpoints
+* Circles are __components__
+* Rounded rectangles are __providers__
+
+The application has two endpoints (only http is shown in the diagram)
 * http
 * nats
 
-## Http endpoint
+### Http endpoint
 
 Some example API calls
 
@@ -18,7 +23,7 @@ curl -T ../data/imagenet/cat.jpg localhost:8081/preprocessing-only/wamli-mobilen
 curl -T ../data/imagenet/cat.jpg localhost:8081/wamli-mobilenetv27%3Alatest
 ```
 
-## NATS endpoint
+### NATS endpoint
 
 Experimental for now, just returning an echo. Some example API calls,
 requires [NATS-cli](https://github.com/nats-io/natscli) to be installed 
@@ -28,4 +33,44 @@ nats req "wasmcloud.echo" "HELLLLOOOOOO"
 
 # Sending a file
 nats req "wasmcloud.echo" "$(cat ../data/imagenet/cat.jpg)"
+```
+
+## Deployment
+
+```bash
+# build all artifacts first
+scripts/build.sh build
+# note that you may call the same script with 'clean' to cleanup
+
+# load the artifacts into a local registry
+scripts/configure.sh
+
+# start wasmcloud in a first window
+wash up --allowed-insecure localhost:5000
+
+# start the application
+scripts/start.sh
+
+# do some inference
+curl -T ../data/imagenet/cat.jpg localhost:8081/preprocessing-only/wamli-mobilenetv27%3Alatest
+```
+
+## Debugging
+
+```bash
+# Start the nats server separately in a first terminal
+nats-server -js -V
+# start as follows in order to record the logs
+# nats-server -js -V &> nats-logs.txt
+
+# start wasmcloud in a second terminal
+# make sure the port matches the one of nats server
+wash up --nats-websocket-port 4222 --allowed-insecure localhost:5000
+# append '> scripts/wasmcloud-logs.txt' in order to record the logs
+
+# watch nats subsciptions in a third terminal
+nats sub '*.*.wrpc.>'
+
+# wath in a forth terminal
+nats sub '_INBOX.*.>'
 ```

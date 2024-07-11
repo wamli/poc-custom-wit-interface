@@ -1,11 +1,29 @@
 #!/bin/bash
 
-BASE_DIR=providers/inference
+# Define the command based on the argument
+if [ "$1" == "build" ]; then
+    command="wash build"
+elif [ "$1" == "clean" ]; then
+    command="cargo clean"
+else
+    echo "Invalid argument. Must be 'build' or 'clean'."
+    exit 1
+fi
 
-cargo build --release --manifest-path "$BASE_DIR/Cargo.toml"
+# Function to execute the command in subdirectories
+execute_command() {
+    local dir="../$1"
+    for subdir in "$dir"/*; do
+        if [ -d "$subdir" ]; then
+            echo
+            echo "----------------------------------------------"
+            echo "Executing '$command' in $subdir"
+            echo "----------------------------------------------"
+            (cd "$subdir" && $command)
+        fi
+    done
+}
 
-wash par create --capid wamli:mlinference --vendor wamli --name inference --arch x86_64-linux --binary $BASE_DIR/target/release/wamli
-mv wamli.par $BASE_DIR/build/inference.par
-
-echo -e "Provider build: "
-wash inspect $BASE_DIR/build/inference.par
+# Execute the command in components and providers directories
+execute_command "components"
+execute_command "providers"

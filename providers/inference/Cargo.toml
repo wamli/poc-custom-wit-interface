@@ -38,7 +38,7 @@ tracing = { version = "0.1", default-features = false }
 
 # optional features
 edgetpu = { git = "https://github.com/Finfalter/edgetpu-rs", rev = "d86f59c", optional=true }
-tflite = { git = "https://github.com/Finfalter/tflite-rs", rev = "5c11a15", optional=true }
+tflite = { git = "https://github.com/Finfalter/tflite-rs", rev = "5c11a15", optional=true, submodules=true }
 
 [lib]
 #name = "wasmcloud_provider_mlinference"

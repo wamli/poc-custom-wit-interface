@@ -1,5 +1,7 @@
 #!/bin/bash
 
+rm -rf ~/.wash
+
 # Find all processes containing "wasmcloud" in their names
 processes=$(ps -aux | grep "wasmcloud" | awk '{print $2}')
 
