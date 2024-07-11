@@ -85,6 +85,7 @@ pub fn send_response_error(response_out: ResponseOutparam, error: Error) {
     response
         .set_status_code(error.status_code.as_u16())
         .expect("Unable to set status code");
+    
     let response_body: OutgoingBody = response.body().expect("body called more than once");
 
     ResponseOutparam::set(response_out, Ok(response));

@@ -2,7 +2,7 @@ wit_bindgen::generate!();
 
 mod errors;
 mod streams;
-mod myhandler;
+mod http_handler;
 mod nats_handler;
 
 pub use exports::wasi::http::incoming_handler::Guest as HttpGuest;
