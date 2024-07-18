@@ -59,12 +59,21 @@ impl Guest for ImagenetPreProcessor {
             "going to enter preprocess()",
         );
 
-        let converted_tensor_data = match preprocess(&tensor_data, CHANNELS, HEIGHT, WIDTH) {
-            Ok(t)      => t,
-            Err(error) => {
-                return Err(MlError::Internal(error.to_string()));
-            }
-        };
+        // let converted_tensor_data = match preprocess(&tensor_data, CHANNELS, HEIGHT, WIDTH) {
+        //     Ok(t)      => t,
+        //     Err(error) => {
+        //         return Err(MlError::Internal(error.to_string()));
+        //     }
+        // };
+
+        let v_size:usize = 64_700;
+
+        let mut converted_tensor_data: Vec<u8> = Vec::with_capacity(v_size);
+
+        // These are all done without reallocating...
+        for i in 0..v_size {
+            converted_tensor_data.push((i % 255) as u8);
+        }
 
         let tensor_length = converted_tensor_data.len();
 

@@ -251,7 +251,7 @@ impl HttpGuest for Api {
                     },
                 };
                 
-                log(Level::Info, "Api", &format!("--------> CONVERSION received from PRE-processor: {:?}", converted));
+                log(Level::Info, "Api", &format!("--------> CONVERSION received from PRE-processor of length: {:?}", converted.data.len()));
 
                 send_positive_response(response_out, "HAPPY TO SEE YOU WENT DOWN THE LUCKY PATH!");
                 return;
