@@ -66,7 +66,7 @@ impl Guest for ImagenetPreProcessor {
         //     }
         // };
 
-        let v_size:usize = 64_700;
+        let v_size:usize = 610_000;
 
         let mut converted_tensor_data: Vec<u8> = Vec::with_capacity(v_size);
 

@@ -19,7 +19,7 @@ REMOTE_REG_SERVER=ghcr.io/wasmcloud
 ##
 
 # HTTPSERVER=httpserver:0.19.1
-HTTPSERVER=http-server:0.21.0
+HTTPSERVER=http-server:0.22.0
 REMOTE_HTTPSERVER=$REMOTE_REG_SERVER/$HTTPSERVER
 # HTTP_PROVIDER_FILE=$EXEC_PATH/../images/httpserver.par.gz
 HTTP_PROVIDER_FILE=$EXEC_PATH/../images/http-server.par.gz

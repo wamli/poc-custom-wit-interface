@@ -55,7 +55,7 @@ scripts/start.sh
 curl -T ../data/imagenet/cat.jpg localhost:8081/preprocessing-only/wamli-mobilenetv27%3Alatest
 ```
 
-## Debugging
+## Debugging the application
 
 ```bash
 # Start the nats server separately in a first terminal
@@ -71,6 +71,33 @@ wash up --nats-websocket-port 4222 --allowed-insecure localhost:5000
 # watch nats subsciptions in a third terminal
 nats sub '*.*.wrpc.>'
 
-# wath in a forth terminal
+# wath in a fourth terminal
 nats sub '_INBOX.*.>'
+
+# deploy from a fifth terminal
+scripts/configure.sh && scripts/start.sh
+```
+
+## Debugging application and runtime
+
+```bash
+# Start the nats server separately in a first terminal
+nats-server -js -V
+# start as follows in order to record the logs
+# nats-server -js -V &> nats-logs.txt
+
+# start wasmcloud host, e.g. from `main` branch, in a second terminal
+cargo run --release -- --allowed-insecure localhost:5000 --allow-file-load
+
+# start wadm, e.g. from `main` branch, in a third terminal
+cargo run --release --bin wadm
+
+# watch nats subsciptions in a fourth terminal
+nats sub '*.*.wrpc.>'
+
+# wath in a fifth terminal
+nats sub '_INBOX.*.>'
+
+# deploy from a sixth terminal
+scripts/configure.sh && scripts/start.sh
 ```
