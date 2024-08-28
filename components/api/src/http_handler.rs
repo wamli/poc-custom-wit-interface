@@ -155,9 +155,9 @@ impl HttpGuest for Api {
                     },
                 };
                 
-                log(Level::Info, "Api", &format!("--------> CONVERSION received from PRE-processor: {:?}", converted));
+                log(Level::Info, "Api", &format!("--------> CONVERSION of length '{}' bytes received from PRE-processor", converted.data.len()));
 
-                let prediction = match predict(model_id, &tensor) {
+                let prediction = match predict(model_id, &converted) {
                     Ok(t) => t,
                     Err(error) => {
                         send_response_error(
@@ -168,15 +168,15 @@ impl HttpGuest for Api {
                     },
                 };
 
-                log(Level::Info, "", &format!("-------> PREDICTION received: {:?}", prediction));
+                log(Level::Info, "", &format!("-------> PREDICTION received of length: '{}' bytes, ", prediction.data.len()));
 
-                // let interface2 = wasmcloud::bus::lattice::CallTargetInterface::new(
-                //     "wamli",
-                //     "ml",
-                //     "conversion",
-                // );
+                let interface2 = CallTargetInterface::new(
+                    "wamli",
+                    "ml",
+                    "classification",
+                );
 
-                // wasmcloud::bus::lattice::set_link_name(POSTPROCESSOR, vec![interface2]);
+                set_link_name(POSTPROCESSOR, vec![interface2]);
                 // let converted = match convert(&prediction, None, None) {
                 //     Ok(t) => t,
                 //     Err(error) => {
@@ -191,6 +191,7 @@ impl HttpGuest for Api {
                 let classifications = match classify(&prediction) {
                     Ok(classifications) => classifications,
                     Err(error) => {
+                        log(Level::Info, "Api", &format!("--------> CLASSIFICATION yields an error: {:?}", &error));
                         send_response_error(
                             response_out,
                             Error::internal_server_error(error),

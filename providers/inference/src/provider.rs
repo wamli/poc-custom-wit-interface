@@ -4,7 +4,7 @@ use crate::engine::{
     get_engine, get_or_else_set_engine, Engine, ExecutionTarget, Graph, GraphEncoding,
     GraphExecutionContext, InferenceFramework, ModelContext, ModelZoo,
 };
-use crate::{serve, DataType, Handler, MlError, Tensor};
+use crate::{DataType, Handler, MlError, Tensor};
 use anyhow::anyhow;
 use anyhow::Context as _;
 use std::collections::HashMap;
@@ -12,7 +12,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
-use wasmcloud_provider_sdk::{run_provider, Context, LinkConfig, Provider, ProviderInitConfig};
+use wasmcloud_provider_sdk::{run_provider, Context, LinkConfig, Provider, ProviderInitConfig, serve_provider_exports, LinkDeleteInfo};
 
 pub struct ModelData {
     pub model: Vec<u8>,
@@ -69,12 +69,22 @@ impl InferenceProvider {
         // The [`serve`] function will set up RPC topics for your provider's exports and await invocations.
         // This is a generated function based on the contents in your `wit/world.wit` file.
         let connection = wasmcloud_provider_sdk::get_connection();
-        serve(
+
+        serve_provider_exports(
             &connection.get_wrpc_client(connection.provider_key()),
             provider,
             shutdown,
+            crate::serve,
         )
         .await
+        .context("failed to serve provider exports")
+
+        // serve(
+        //     &connection.get_wrpc_client(connection.provider_key()),
+        //     provider,
+        //     shutdown,
+        // )
+        // .await
 
         // If your provider has no exports, simply await the shutdown to keep the provider running
         // shutdown.await;
@@ -171,7 +181,11 @@ impl Handler<Option<Context>> for InferenceProvider {
             }
         };
 
+        info!("FETCHING ... the inference engine");
+
         let engine = get_engine(Arc::clone(&self.engines), &model_context.graph_encoding).await?;
+
+        info!("AWAITING ... the result");
 
         let inference_result = tokio::task::spawn_blocking(move || async move {
             if let Err(e) = engine
@@ -200,6 +214,8 @@ impl Handler<Option<Context>> for InferenceProvider {
         .await
         .map_err(|e| MlError::Internal(format!("internal join error: {}", e)))?
         .await?;
+
+        info!("ASSEMBLING ... the result");
 
         if let Err(error) = inference_result {
             log::error!("predict() - problem collecting results {}", error);
@@ -323,11 +339,12 @@ impl Provider for InferenceProvider {
         Ok(())
     }
 
-    /// When a link is deleted from your provider to a component, this method will be called with the target ID
-    /// of the component that was unlinked. You can use this method to clean up any state or resources that were
-    /// associated with the linked component.
-    async fn delete_link_as_source(&self, target: &str) -> anyhow::Result<()> {
-        self.linked_to.write().await.remove(target);
+    // /// When a link is deleted from your provider to a component, this method will be called with the target ID
+    // /// of the component that was unlinked. You can use this method to clean up any state or resources that were
+    // /// associated with the linked component.
+    async fn delete_link_as_source(&self, info: impl LinkDeleteInfo) -> anyhow::Result<()> {
+        // self.linked_to.write().await.remove(target);
+        let target = info.get_target_id();
 
         info!(
             "finished processing delete link from provider to component [{}]",
@@ -336,18 +353,30 @@ impl Provider for InferenceProvider {
         Ok(())
     }
 
-    /// When a link is deleted from a component to your provider, this method will be called with the source ID
-    /// of the component that was unlinked. You can use this method to clean up any state or resources that were
-    /// associated with the linked component.
-    async fn delete_link_as_target(&self, source_id: &str) -> anyhow::Result<()> {
+    // /// When a link is deleted from a component to your provider, this method will be called with the source ID
+    // /// of the component that was unlinked. You can use this method to clean up any state or resources that were
+    // /// associated with the linked component.
+    async fn delete_link_as_target(&self, info: impl LinkDeleteInfo) -> anyhow::Result<()>
+    {
+        let source_id = info.get_source_id();
         self.linked_from.write().await.remove(source_id);
-
-        info!(
+    
+        debug!(
             "finished processing delete link from component [{}] to provider",
             source_id
         );
         Ok(())
     }
+
+    // async fn delete_link_as_target(&self, source_id: &str) -> anyhow::Result<()> {
+    //     self.linked_from.write().await.remove(source_id);
+
+    //     debug!(
+    //         "finished processing delete link from component [{}] to provider",
+    //         source_id
+    //     );
+    //     Ok(())
+    // }
 
     /// Handle shutdown request by cleaning out all linked components. This is a good place to clean up any
     /// resources or connections your provider has established.

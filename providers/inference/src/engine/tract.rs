@@ -18,6 +18,7 @@ use tract_onnx::{
     tract_hir::infer::InferenceOp,
 };
 use tract_tensorflow;
+// use core::slice::SlicePattern;
 
 // use wasmcloud_interface_mlinference::{
 //    InferenceOutput, Status, Tensor, ValueType, TENSOR_FLAG_ROW_MAJOR,
@@ -202,7 +203,8 @@ impl InferenceEngine for TractEngine {
             InferenceFact::dt_shape(f32::datum_type(), shape.clone()),
         )?;
 
-        let data: Vec<f32> = bytes_to_f32_vec(tensor.data.as_slice().to_vec()).await?;
+        // let data: Vec<f32> = bytes_to_f32_vec(tensor.data.as_slice().to_vec()).await?;
+        let data: Vec<f32> = bytes_to_f32_vec(tensor.data.to_vec()).await?;
 
         let input: TractTensor = Array::from_shape_vec(shape, data)
             .map_err(|e| InferenceError::ReShapeError(e.to_string()))?
@@ -360,7 +362,7 @@ impl InferenceEngine for TractEngine {
                 .cloned()
                 .map(|i| i as u32)
                 .collect::<Vec<u32>>(),
-            data: bytes,
+            data: bytes.into(),
         };
 
         Ok(tensor_out)

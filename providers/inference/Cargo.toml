@@ -30,9 +30,9 @@ tract-data = "0.21"
 tract-onnx = "0.21"
 tract-linalg = "0.21"
 tract-tensorflow = "0.21"
-wit-bindgen-wrpc = "0.3.7"
+wit-bindgen-wrpc = "0.6.4"
 oci-distribution = "0.11.0"
-wasmcloud-provider-sdk = "0.5.0"
+wasmcloud-provider-sdk = "0.8.0"
 tokio = { version = "1", features = ["full"] }
 tracing = { version = "0.1", default-features = false }
 

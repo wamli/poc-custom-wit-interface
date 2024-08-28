@@ -59,21 +59,19 @@ impl Guest for ImagenetPreProcessor {
             "going to enter preprocess()",
         );
 
-        // let converted_tensor_data = match preprocess(&tensor_data, CHANNELS, HEIGHT, WIDTH) {
-        //     Ok(t)      => t,
-        //     Err(error) => {
-        //         return Err(MlError::Internal(error.to_string()));
-        //     }
-        // };
+        let converted_tensor_data = match preprocess(&tensor_data, CHANNELS, HEIGHT, WIDTH) {
+            Ok(t)      => t,
+            Err(error) => {
+                return Err(MlError::Internal(error.to_string()));
+            }
+        };
 
-        let v_size:usize = 610_000;
-
-        let mut converted_tensor_data: Vec<u8> = Vec::with_capacity(v_size);
-
-        // These are all done without reallocating...
-        for i in 0..v_size {
-            converted_tensor_data.push((i % 255) as u8);
-        }
+        // let v_size:usize = 610_000;
+        // let mut converted_tensor_data: Vec<u8> = Vec::with_capacity(v_size);
+        // // These are all done without reallocating...
+        // for i in 0..v_size {
+        //     converted_tensor_data.push((i % 255) as u8);
+        // }
 
         let tensor_length = converted_tensor_data.len();
 
@@ -88,12 +86,6 @@ impl Guest for ImagenetPreProcessor {
             "ImagenetPreProcessor",
             &format!("leaving preprocess(), returning tensor of length {}", tensor_length),
         );
-
-        // let tensor_out = Tensor {
-        //     shape: vec![1],
-        //     dtype: DataType::F32,
-        //     data: vec![1, 2, 3, 4, 5, 6, 7, 8, 9]
-        // };
 
         Ok(tensor_out)
     }
