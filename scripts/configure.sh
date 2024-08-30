@@ -53,6 +53,9 @@ SQUEEZENET_MODEL_ACTOR_FILE=$EXEC_PATH/../components/model/build/model_s.wasm
 MOBILENETV27_MODEL=wamli-mobilenetv27:latest
 MOBILENETV27_MODEL_FILE=mobilenetv27.tar
 
+SQUEEZENETV117_MODEL=wamli-squeezenetv117:latest
+SQUEEZENETV117_MODEL_FILE=squeezenetv117.tar
+
 ##
 #   LOCAL REGISTRY 
 ##
@@ -172,9 +175,12 @@ push_artefact $INFERENCE $INFERENCE_PROVIDER_FILE
 
 # push_artefact $SQUEEZENET_MODEL_ACTOR $SQUEEZENET_MODEL_ACTOR_FILE
 
-# Push the reference model to local registry
+# Push the reference models to local registry
 docker load -i ../images/$MOBILENETV27_MODEL_FILE
 docker push $LOCAL_REG_SERVER/$MOBILENETV27_MODEL
+
+docker load -i ../images/$SQUEEZENETV117_MODEL_FILE
+docker push $LOCAL_REG_SERVER/$SQUEEZENETV117_MODEL
 
 # set +x
 
