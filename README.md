@@ -16,11 +16,12 @@ The application has two endpoints (only http is shown in the diagram)
 Some example API calls
 
 ```bash
-curl -X GET localhost:8081/prefetch/wamli-mobilenetv27%3Alatest
+curl -X GET localhost:8081/prefetch/wamli-squeezenetv117%3Alatest
 
 curl -T ../data/imagenet/cat.jpg localhost:8081/preprocessing-only/wamli-mobilenetv27%3Alatest
 
 curl -T ../data/imagenet/cat.jpg localhost:8081/wamli-mobilenetv27%3Alatest
+curl -T ../data/imagenet/cat.jpg localhost:8081/wamli-squeezenetv117%3Alatest
 ```
 
 ### NATS endpoint
@@ -101,3 +102,7 @@ nats sub '_INBOX.*.>'
 # deploy from a sixth terminal
 scripts/configure.sh && scripts/start.sh
 ```
+
+## Build
+
+In case the __wamli__ (WIT) package is updated, run `wit-deps update` before `wash build` to update the respective repository.

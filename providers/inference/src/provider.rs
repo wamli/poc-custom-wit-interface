@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use wasmcloud_provider_sdk::{run_provider, Context, LinkConfig, Provider, ProviderInitConfig, serve_provider_exports, LinkDeleteInfo};
 
 pub struct ModelData {
@@ -165,6 +165,18 @@ impl Handler<Option<Context>> for InferenceProvider {
         info!("PREDICTING ... the future");
 
         let models_lock = self.models.read().await;
+
+        if models_lock.get(&model_id).is_none() {
+            let _ = self
+                .prefetch(_ctx, model_id.to_owned())
+                .await
+                .map_err(|_| {
+                    MlError::ContextNotFoundError(format!(
+                        "Model '{}' is unknown and cannot be found in model store either",
+                        &model_id
+                    ))
+                })?;
+        }
 
         let model_context = match models_lock.get(&model_id) {
             Some(mc) => mc.to_owned(),

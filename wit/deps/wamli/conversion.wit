@@ -1,0 +1,14 @@
+interface conversion {   
+   use types.{
+      tensor,
+      dimensions,
+      data-type,
+      ml-error,
+   };
+   
+   convert: func(
+      tensor: tensor, 
+      to-shape: option<dimensions>, 
+      to-dtype: option<data-type>
+   ) -> result<tensor, ml-error>;
+}

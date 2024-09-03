@@ -1,0 +1,20 @@
+interface inference {
+   use types.{
+      tensor,
+      ml-error
+   };
+   
+   predict: func(
+      model-id: string,
+      tensor: tensor,
+   ) -> result<tensor, ml-error>;
+   
+   /// Initiate the load of given ai model.
+   /// `model-id` is supposed to be a valid OCI image name, e.g. 
+   /// * mobilenetv27:latest
+   /// * mobilenetv27:42.0
+   /// The implementor will try to pull it from a given OCI registry.
+   prefetch: func(
+      model-id: string
+   ) -> result<_,ml-error>;
+}
