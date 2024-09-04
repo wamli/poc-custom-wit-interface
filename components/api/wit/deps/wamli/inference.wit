@@ -17,4 +17,14 @@ interface inference {
    prefetch: func(
       model-id: string
    ) -> result<_,ml-error>;
+
+   /// Initiate the removal of given ai model.
+   /// `model-id` is supposed to be a valid OCI image name, e.g. 
+   /// * mobilenetv27:latest
+   /// * mobilenetv27:42.0
+   /// The implementor will remove all internal references to this resource.
+   preempt: func(
+      model-id: string
+   ) -> result<_,ml-error>;
+
 }

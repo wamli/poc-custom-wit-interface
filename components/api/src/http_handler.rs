@@ -2,7 +2,6 @@ use urlencoding::decode;
 use serde_json::from_str; 
 use std::io::{Read, Write};
 use crate::wasi::logging::logging::*;
-use crate::wamli::ml::inference::predict;
 use crate::streams::InputStreamReader;
 
 use crate::Api;
@@ -15,7 +14,7 @@ use crate::{
     wasi::http::types::*,
     wamli::ml::{
         types::{DataType, Tensor},
-        inference::prefetch,
+        inference::{prefetch, preempt, predict},
         conversion::convert,
         classification::classify,
     },
@@ -100,6 +99,17 @@ impl HttpGuest for Api {
 
 
         match (method, segments.as_slice()) {
+            (Method::Delete, [model_id]) => {
+                log(Level::Info, "Api", &format!("--------> API: going to DELETE model '{:?}' ", model_id));
+
+                let preempt_result = preempt(model_id);
+
+                log(Level::Info, "Api", &format!("--------> API: PREEMPT result: '{:?}' ", preempt_result));
+                
+                send_positive_response(response_out, &format!("Feedback from inference provider: {:?}", preempt_result));
+                return;
+            },
+
             (Method::Get, ["prefetch", model_id]) => {
                 log(Level::Info, "Api", &format!("--------> API: executing PREFETCH with model_id: '{:?}' ", model_id));
 

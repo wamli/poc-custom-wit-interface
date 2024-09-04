@@ -166,23 +166,11 @@ impl Handler<Option<Context>> for InferenceProvider {
 
         let models_lock = self.models.read().await;
 
-        if models_lock.get(&model_id).is_none() {
-            let _ = self
-                .prefetch(_ctx, model_id.to_owned())
-                .await
-                .map_err(|_| {
-                    MlError::ContextNotFoundError(format!(
-                        "Model '{}' is unknown and cannot be found in model store either",
-                        &model_id
-                    ))
-                })?;
-        }
-
         let model_context = match models_lock.get(&model_id) {
             Some(mc) => mc.to_owned(),
             None => {
                 log::error!(
-                    "predict() - model {} not found in models={:?}",
+                    "predict() - model '{}' not found in models {:?}",
                     &model_id,
                     &models_lock
                 );
@@ -258,6 +246,30 @@ impl Handler<Option<Context>> for InferenceProvider {
 
         self.register_model(&model_id, model_data).await?;
 
+        Ok(Ok(()))
+    }
+
+    async fn preempt(
+        &self,
+        _ctx: Option<Context>,
+        model_id: String,
+    ) -> anyhow::Result<Result<(), MlError>> {
+        info!("preempting model '{}'", model_id);
+
+        let mut models_lock = self.models.write().await;
+
+        match models_lock.get(&model_id) {
+            None => {
+                return Ok(Err(MlError::ContextNotFoundError(format!(
+                    "No model registered under '{}'",
+                    &model_id
+                ))));
+            },
+
+            Some(_) => {
+                models_lock.remove(&model_id);
+            } 
+        }
         Ok(Ok(()))
     }
 }

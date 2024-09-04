@@ -22,6 +22,8 @@ curl -T ../data/imagenet/cat.jpg localhost:8081/preprocessing-only/wamli-mobilen
 
 curl -T ../data/imagenet/cat.jpg localhost:8081/wamli-mobilenetv27%3Alatest
 curl -T ../data/imagenet/cat.jpg localhost:8081/wamli-squeezenetv117%3Alatest
+
+curl -X DELETE localhost:8081/wamli-squeezenetv117%3Alatest
 ```
 
 ### NATS endpoint
